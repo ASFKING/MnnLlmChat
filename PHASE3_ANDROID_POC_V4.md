@@ -95,7 +95,7 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │                   UI 层                          │
-│  ViewBinding + XML 布局 · 6 个 Tab · Fragment    │
+│  ViewBinding + XML 布局 · 5 个 Tab · Fragment    │
 ├─────────────────────────────────────────────────┤
 │                  业务层                           │
 │  结构化提取 · RAG 问答 · 文档生成 · 图片理解      │
@@ -556,7 +556,7 @@ apps/Android/MnnLlmChat/（基于 MnnLlmChat 裁剪）
 | `engine/TTSEngine.kt` | 语音合成封装 |
 | `engine/VoiceChatEngine.kt` | 语音对话串联 |
 | `engine/ModelManager.kt` | 统一模型生命周期 |
-| `ui/fragment/*.kt` | 6 个 Fragment 页面 |
+| `ui/fragment/*.kt` | 5 个 Fragment 页面（HomeFragment 含性能测试） |
 | `ui/adapter/ChatAdapter.kt` | 对话消息适配器 |
 | `util/AudioRecorder.kt` | 录音工具 |
 | `util/AudioPlayer.kt` | 播放工具 |
@@ -1222,19 +1222,17 @@ class DocumentStore(private val context: Context) {
 ### 7.1 页面结构
 
 ```
-底部导航栏（6 个 Tab）
+底部导航栏（5 个 Tab）
 ├── 系统状态（HomeFragment）
-│   └── 显示：各模型加载状态、内存使用、向量库大小、性能数据
+│   └── 显示：各模型加载状态、内存使用、向量库大小、性能数据 + 性能测试入口
 ├── 文本对话（ChatFragment）
 │   └── 多轮对话 + 结构化提取 + 文档生成
 ├── RAG 问答（RAGFragment）
 │   └── 文档上传 + 知识库管理 + 对话问答
 ├── 图片理解（VisionFragment）
 │   └── 图片选择器 + 文字输入 + 结果展示
-├── 语音对话（VoiceFragment）
-│   └── 按住说话 + ASR 识别 + LLM 回答 + TTS 播放
-└── 性能测试（BenchmarkFragment）
-    └── 各引擎性能测试 + 结果记录
+└── 语音对话（VoiceFragment）
+    └── 按住说话 + ASR 识别 + LLM 回答 + TTS 播放
 ```
 
 ### 7.2 主布局
@@ -1266,12 +1264,11 @@ class DocumentStore(private val context: Context) {
 <!-- menu/bottom_nav_menu.xml -->
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/nav_home" android:icon="@drawable/ic_home" android:title="状态" />
-    <item android:id="@+id/nav_chat" android:icon="@drawable/ic_chat" android:title="对话" />
-    <item android:id="@+id/nav_rag" android:icon="@drawable/ic_search" android:title="RAG" />
-    <item android:id="@+id/nav_vision" android:icon="@drawable/ic_image" android:title="视觉" />
-    <item android:id="@+id/nav_voice" android:icon="@drawable/ic_mic" android:title="语音" />
-    <item android:id="@+id/nav_benchmark" android:icon="@drawable/ic_speed" android:title="测试" />
+    <item android:id="@+id/nav_home" android:icon="@android:drawable/ic_menu_info_details" android:title="状态" />
+    <item android:id="@+id/nav_chat" android:icon="@android:drawable/ic_menu_edit" android:title="对话" />
+    <item android:id="@+id/nav_rag" android:icon="@android:drawable/ic_menu_search" android:title="RAG" />
+    <item android:id="@+id/nav_vision" android:icon="@android:drawable/ic_menu_gallery" android:title="视觉" />
+    <item android:id="@+id/nav_voice" android:icon="@android:drawable/ic_btn_speak_now" android:title="语音" />
 </menu>
 ```
 
@@ -1298,7 +1295,6 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_rag -> RAGFragment()
                 R.id.nav_vision -> VisionFragment()
                 R.id.nav_voice -> VoiceFragment()
-                R.id.nav_benchmark -> BenchmarkFragment()
                 else -> HomeFragment()
             }
             loadFragment(fragment)
@@ -1542,7 +1538,7 @@ NDK = 27.2.12479018
 ```
 Day 0  环境准备 + Kotlin 基础
 Day 1  用预编译 .so 跑通 MnnLlmChat + 裁剪项目
-Day 2  ViewBinding + XML 搭 UI 骨架（6 个 Tab）
+Day 2  ViewBinding + XML 搭 UI 骨架（5 个 Tab）
 Day 3  嵌入模型集成（ONNX Runtime + bge）
 Day 4  向量检索 + RAG
 Day 5  结构化提取 + 文档生成
@@ -1606,15 +1602,15 @@ Day 9  联调 + 性能测试 + PoC 总结
 
 ### Day 2：ViewBinding + XML 搭 UI 骨架
 
-**目标：** 用 ViewBinding + XML 搭建 6 个 Tab 的 UI 框架。
+**目标：** 用 ViewBinding + XML 搭建 5 个 Tab 的 UI 框架。
 
 | # | 任务 | 类型 | 预计耗时 | 产出 | 验收标准 |
 |---|---|---|---|---|---|
 | 2.1 | 配置 ViewBinding（build.gradle） | 配置 | 0.5h | ViewBinding 可用 | 编译通过 |
 | 2.2 | 创建 activity_main.xml（BottomNav + FragmentContainer） | UI | 0.5h | 主布局 | 布局渲染正常 |
-| 2.3 | 创建 bottom_nav_menu.xml | UI | 0.5h | 导航菜单 | 6 个 Tab 图标 |
+| 2.3 | 创建 bottom_nav_menu.xml | UI | 0.5h | 导航菜单 | 5 个 Tab 图标 |
 | 2.4 | 实现 MainActivity + Fragment 切换逻辑 | UI | 1h | Tab 可切换 | 点击 Tab 显示对应页面 |
-| 2.5 | 创建 6 个 Fragment 空壳 + 对应布局 | UI | 1h | 占位页面 | 每个 Tab 有内容显示 |
+| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | UI | 1h | 占位页面 | 每个 Tab 有内容显示 |
 | 2.6 | 实现 HomeFragment（系统状态页） | UI | 1.5h | 状态页 | 显示模型状态和内存信息 |
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | UI | 1h | 对话消息列表 | RecyclerView 显示消息 |
 | 2.8 | 实现 MemoryMonitor 工具类 | 工具 | 0.5h | 内存监控 | 能采集内存数据 |
@@ -1622,7 +1618,7 @@ Day 9  联调 + 性能测试 + PoC 总结
 
 **Day 2 总耗时：** 约 7 小时
 
-**Day 2 完成标志：** 6 个 Tab 可切换，HomeFragment 显示系统状态，对话消息列表可用。
+**Day 2 完成标志：** 5 个 Tab 可切换，HomeFragment 显示系统状态，对话消息列表可用。
 
 ---
 
@@ -1778,7 +1774,7 @@ Day 9  联调 + 性能测试 + PoC 总结
 ```
 Day 0 ✅ 所有工具安装完毕 ✅ MNN 源码克隆 ✅ 手机 adb 连接 ✅ Kotlin 基础语法
 Day 1 ✅ MnnLlmChat 跑通 ✅ 裁剪后项目编译通过 ✅ 预编译 .so 加载成功
-Day 2 ✅ 6 个 Tab 可切换 ✅ HomeFragment 显示状态 ✅ ChatAdapter 可用
+Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用
 Day 3 ✅ bge 模型加载 ✅ encode() 返回正确向量 ✅ 相似度验证通过
 Day 4 ✅ VectorStore 可用 ✅ RAG 端到端通过 ✅ RAGFragment 可交互
 Day 5 ✅ 结构化提取可用 ✅ JSON 正确率 > 90% ✅ 文档生成可用
@@ -1962,7 +1958,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 2.2 | 创建 activity_main.xml（BottomNav + FragmentContainer） | ⬜ | — | |
 | 2.3 | 创建 bottom_nav_menu.xml | ⬜ | — | |
 | 2.4 | 实现 MainActivity + Fragment 切换逻辑 | ⬜ | — | |
-| 2.5 | 创建 6 个 Fragment 空壳 + 对应布局 | ⬜ | — | |
+| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | ⬜ | — | |
 | 2.6 | 实现 HomeFragment（系统状态页） | ⬜ | — | |
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | ⬜ | — | |
 | 2.8 | 实现 MemoryMonitor 工具类 | ⬜ | — | |
