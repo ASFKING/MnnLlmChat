@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 定义底部导航栏的 6 个 Tab -->
+<!-- android:id → 每个 Tab 的唯一标识，代码里用它判断点了哪个 -->
+<!-- android:icon → Tab 图标（先用系统自带的，后面可以换） -->
+<!-- android:title → Tab 文字 -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_home" android:icon="@android:drawable/ic_menu_info_details" android:title="状态" />
+    <item android:id="@+id/nav_chat" android:icon="@android:drawable/ic_menu_edit" android:title="对话" />
+    <item android:id="@+id/nav_rag" android:icon="@android:drawable/ic_menu_search" android:title="RAG" />
+    <item android:id="@+id/nav_vision" android:icon="@android:drawable/ic_menu_gallery" android:title="视觉" />
+    <item android:id="@+id/nav_voice" android:icon="@android:drawable/ic_btn_speak_now" android:title="语音" />
+</menu>
