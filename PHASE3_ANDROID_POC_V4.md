@@ -1906,7 +1906,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 阶段 | 名称 | 状态 | 完成度 |
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
-| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 50% |
+| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 60% |
 | Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 60% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
@@ -1942,7 +1942,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 1.2 | 下载 Sherpa-MNN 预编译 .so | ✅ | 2026-05-13 | libsherpa-mnn-jni.so + libmnn_tts.so 已就位 |
 | 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | ✅ | 2026-05-13 | Gradle Sync 成功 |
 | 1.4 | 替换 .so 为预编译版本，编译运行 | ✅ | 2026-05-13 | 编译通过，修复了裁剪残留依赖 |
-| 1.5 | 下载一个模型并测试推理 | ⬜ | — | |
+| 1.5 | 下载一个模型并测试推理 | ✅ | 2026-05-13 | Qwen3-0.6B 下载成功，页面显示已下载 |
 | 1.6 | 理解 MnnLlmChat 的代码结构 | ⬜ | — | |
 | 1.7 | 复制项目为独立目录，修改包名 | ✅ | 2026-05-12 | 已有独立项目 `com.poc.ondevice` |
 | 1.8 | 删除不需要的代码（见删除清单） | ⬜ | — | |
@@ -2059,7 +2059,8 @@ Sherpa-MNN ASR/TTS 参考：
 
 | 模型 | 大小 | 下载状态 | 部署状态 | 备注 |
 |------|------|----------|----------|------|
-| Qwen3-1.7B (Q4_K_M) | ~1.1GB | ⬜ | ⬜ | LLM 推理主力 |
+| Qwen3-1.7B (Q4_K_M) | ~1.1GB | ⬜ | ⬜ | LLM 推理主力（备选） |
+| Qwen3-0.6B | ~0.6GB | ✅ | ✅ | 已下载，PoC 验证用 |
 | bge-small-zh-v1.5 | ~100MB | ⬜ | ⬜ | 文本嵌入 |
 | Qwen2.5-VL-3B | ~2.5GB | ⬜ | ⬜ | 多模态（可选） |
 | SenseVoice | ~200MB | ⬜ | ⬜ | ASR |
@@ -2105,3 +2106,5 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 添加 Timber 日志库依赖
 - ✅ 重写 ModelUtils.kt，删除对 modelmarket/R.drawable 等缺失资源的依赖
 - ✅ Android Studio 编译通过（Gradle Sync + Build 成功）
+- ✅ App 安装到实体手机成功
+- ✅ Qwen3-0.6B 模型下载成功，页面显示已下载
