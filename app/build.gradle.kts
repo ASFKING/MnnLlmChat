@@ -1,8 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    // Kotlin Android 插件：让项目能编译 .kt 文件
-    // AGP 9.x 内置了 Kotlin 支持，但显式声明更清晰
-    id("org.jetbrains.kotlin.android") version "2.1.21"
+    // Kotlin Android 插件：AGP 9.x 已内置 Kotlin，不指定版本
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
