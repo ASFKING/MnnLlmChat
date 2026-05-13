@@ -141,5 +141,51 @@
             android:lineSpacingExtra="4dp"
             android:paddingVertical="4dp" />
 
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:attr/listDivider"
+            android:layout_marginVertical="12dp" />
+
+        <!-- ===== 区域 5：模型下载 ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📥 模型下载"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 下载进度文字 -->
+        <TextView
+            android:id="@+id/tv_download_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="选择模型开始下载"
+            android:textSize="14sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:paddingVertical="4dp" />
+
+        <!-- 下载进度条 -->
+        <ProgressBar
+            android:id="@+id/progress_download"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0"
+            android:visibility="gone"
+            android:layout_marginVertical="4dp" />
+
+        <!-- 模型下载按钮容器 -->
+        <!-- 动态添加按钮，这里用 LinearLayout 作为容器 -->
+        <LinearLayout
+            android:id="@+id/layout_model_buttons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp" />
+
     </LinearLayout>
 </ScrollView>
