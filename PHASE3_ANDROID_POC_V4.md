@@ -2071,6 +2071,8 @@ Sherpa-MNN ASR/TTS 参考：
 |------|----------|----------|------|
 | 2026-05-12 | git push 被拒（远程有 README） | `git pull origin main --allow-unrelated-histories` 合并后推送 | 2min |
 | 2026-05-12 | .idea/ 目录混入 git 暂存区 | `git rm -r --cached .idea` + `.gitignore` 追加 `/.idea/` | 2min |
+| 2026-05-13 | ChatDataItem.kt 引用已删除的 chatlist 包 | 删除 import，内联 USER/ASSISTANT 常量 | 5min |
+| 2026-05-13 | 裁剪后 mls.api/modelist/qnn/benchmark 包缺失 | 创建 9 个桩类 + App.kt + Timber 依赖 | 15min |
 
 ### D.15 关键决策记录
 
@@ -2096,4 +2098,8 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ ChatFragment 实现：ViewBinding + RecyclerView + ChatMessageAdapter
 - ✅ RAGFragment / VisionFragment / VoiceFragment：ViewBinding 骨架就绪
 - ✅ item_chat_message.xml + bg_chat_bubble.xml 创建完成
-- 🟡 待验证编译通过（pull 最新代码后 Build）
+- ✅ 修复裁剪后残留编译依赖：创建 9 个桩类（mls.api/modelist/qnn/benchmark）
+- ✅ 新建 App.kt（Application 入口，初始化 ApplicationProvider）
+- ✅ AndroidManifest.xml 注册 App 类 + 录音权限
+- ✅ 添加 Timber 日志库依赖
+- 🟡 待在 Android Studio 中 Build 验证编译通过
