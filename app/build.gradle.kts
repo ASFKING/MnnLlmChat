@@ -1,7 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    // Kotlin Android 插件：AGP 9.x 已内置 Kotlin，不指定版本
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
