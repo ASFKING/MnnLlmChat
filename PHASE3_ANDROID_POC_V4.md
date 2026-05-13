@@ -1898,16 +1898,16 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-12
-> **当前阶段**：Day 0 → Day 1 过渡中
+> **最后更新**：2026-05-13
+> **当前阶段**：Day 1 进行中
 
 ### D.1 总览
 
 | 阶段 | 名称 | 状态 | 完成度 |
 |------|------|------|--------|
-| Day 0 | 环境准备 + Kotlin 基础 | 🟡 进行中 | 60% |
-| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ⬜ 未开始 | 0% |
-| Day 2 | ViewBinding + XML 搭 UI 骨架 | ⬜ 未开始 | 0% |
+| Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
+| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 10% |
+| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 30% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
@@ -1926,16 +1926,13 @@ Sherpa-MNN ASR/TTS 参考：
 | 0.2 | 安装 NDK 27.2.12479018 | ✅ | — | 已安装                  |
 | 0.3 | 安装 CMake 3.22.1+ | ✅ | — | 已安装                  |
 | 0.4 | 安装 Git + Python 3.8+ | ✅ | 2026-05-12 | Git 已安装并配置           |
-| 0.5 | 克隆 MNN 源码 | ⬜ | — | 等待执行 `git clone`     |
+| 0.5 | 克隆 MNN 源码 | ✅ | 2026-05-13 | 已克隆到工作目录           |
 | 0.6 | 准备测试手机（8GB+ RAM，ARM64） | ✅ | — | 虚拟设备                 |
 | 0.7 | 学习 Kotlin 基础语法 | ✅ | — | 有基础，按需补充             |
 | 0.8 | 创建空项目并推送到 GitHub | ✅ | 2026-05-12 | `ASFKING/MnnLlmChat` |
 | 0.9 | 配置 .gitignore（排除 .idea 等） | ✅ | 2026-05-12 | 已清理并推送               |
 
-**Day 0 剩余事项：**
-- [ ] 确认 NDK 和 CMake 是否已安装（Android Studio SDK Manager 中检查）
-- [ ] 克隆 MNN 官方仓库
-- [ ] 准备测试手机 + adb 连接
+**Day 0 完成 ✅**
 
 ### D.3 Day 1：跑通 MnnLlmChat + 裁剪项目
 
@@ -1954,11 +1951,11 @@ Sherpa-MNN ASR/TTS 参考：
 
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
-| 2.1 | 配置 ViewBinding（build.gradle） | ⬜ | — | |
-| 2.2 | 创建 activity_main.xml（BottomNav + FragmentContainer） | ⬜ | — | |
-| 2.3 | 创建 bottom_nav_menu.xml | ⬜ | — | |
-| 2.4 | 实现 MainActivity + Fragment 切换逻辑 | ⬜ | — | |
-| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | ⬜ | — | |
+| 2.1 | 配置 ViewBinding（build.gradle） | ✅ | 2026-05-12 | build.gradle.kts 已启用 |
+| 2.2 | 创建 activity_main.xml（BottomNav + FragmentContainer） | ✅ | 2026-05-12 | 已完成 |
+| 2.3 | 创建 bottom_nav_menu.xml | ✅ | 2026-05-12 | 5 个 Tab 已配置 |
+| 2.4 | 实现 MainActivity + Fragment 切换逻辑 | ✅ | 2026-05-12 | 已完成，含详细注释 |
+| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | 🟡 | — | Kotlin 文件已有，布局 XML 待创建 |
 | 2.6 | 实现 HomeFragment（系统状态页） | ⬜ | — | |
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | ⬜ | — | |
 | 2.8 | 实现 MemoryMonitor 工具类 | ⬜ | — | |
@@ -2087,4 +2084,9 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ Android Studio 已安装，空项目创建成功
 - ✅ 项目推送到 GitHub：`ASFKING/MnnLlmChat`
 - ✅ .gitignore 配置完成，排除了 .idea、build 等目录
-- 🟡 准备进入 Day 1：克隆 MNN 官方仓库
+- ✅ ViewBinding 已配置，activity_main.xml + bottom_nav_menu.xml 已创建
+- ✅ MainActivity + 5 个 Fragment 空壳已创建
+
+#### 2026-05-13（Day 1 启动）
+- ✅ MNN 官方仓库已克隆（`git clone --depth 1`）
+- 🟡 进入 Day 1：下载预编译 .so → 跑通 MnnLlmChat → 裁剪
