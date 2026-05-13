@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- item_chat_message.xml：单条聊天消息的布局 -->
+<!-- 被 RecyclerView 的 Adapter 使用，每条消息实例化一次 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="4dp"
+    android:paddingHorizontal="8dp">
+
+    <!-- 发送者名称（"你" 或 "AI"） -->
+    <TextView
+        android:id="@+id/tv_sender"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginBottom="2dp" />
+
+    <!-- 消息内容气泡 -->
+    <TextView
+        android:id="@+id/tv_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="280dp"
+        android:textSize="15sp"
+        android:lineSpacingExtra="3dp"
+        android:padding="10dp"
+        android:background="@drawable/bg_chat_bubble" />
+
+</LinearLayout>

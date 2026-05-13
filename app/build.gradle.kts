@@ -67,6 +67,9 @@ dependencies {
     // Material Design 组件（BottomNavigationView 等）
     implementation(libs.material)
 
+    // RecyclerView（消息列表必须）
+    implementation(libs.androidx.recyclerview)
+
     // Kotlin 协程（异步编程，LLM 流式生成必须）
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 

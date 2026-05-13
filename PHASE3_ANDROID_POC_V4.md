@@ -1907,7 +1907,7 @@ Sherpa-MNN ASR/TTS 参考：
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
 | Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 10% |
-| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 30% |
+| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 60% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
@@ -1955,9 +1955,9 @@ Sherpa-MNN ASR/TTS 参考：
 | 2.2 | 创建 activity_main.xml（BottomNav + FragmentContainer） | ✅ | 2026-05-12 | 已完成 |
 | 2.3 | 创建 bottom_nav_menu.xml | ✅ | 2026-05-12 | 5 个 Tab 已配置 |
 | 2.4 | 实现 MainActivity + Fragment 切换逻辑 | ✅ | 2026-05-12 | 已完成，含详细注释 |
-| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | 🟡 | — | Kotlin 文件已有，布局 XML 待创建 |
-| 2.6 | 实现 HomeFragment（系统状态页） | ⬜ | — | |
-| 2.7 | 实现 ChatAdapter + item_chat_message.xml | ⬜ | — | |
+| 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | ✅ | 2026-05-13 | 5 个布局 XML + ViewBinding Fragment 已完成 |
+| 2.6 | 实现 HomeFragment（系统状态页） | ✅ | 2026-05-13 | 含内存监控、模型状态显示 |
+| 2.7 | 实现 ChatAdapter + item_chat_message.xml | ✅ | 2026-05-13 | 含 ChatMessageAdapter + RecyclerView |
 | 2.8 | 实现 MemoryMonitor 工具类 | ⬜ | — | |
 | 2.9 | 实现 PerformanceTracker 工具类 | ⬜ | — | |
 
@@ -2087,9 +2087,13 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ ViewBinding 已配置，activity_main.xml + bottom_nav_menu.xml 已创建
 - ✅ MainActivity + 5 个 Fragment 空壳已创建
 
-#### 2026-05-13（Day 1 启动）
+#### 2026-05-13（Day 1 + Day 2 并行推进）
 - ✅ MNN 官方仓库已克隆（`git clone --depth 1`）
-- ✅ 预编译 .so 文件已获取：libMNN.so、libmnnllmapp.so、libsherpa-mnn-jni.so、libmnn_tts.so、libc++_shared.so 等共 13 个
-- ✅ .so 文件已放入 `jniLibs/arm64-v8a/` 目录
-- 🟡 待编译运行 MnnLlmChat（Gradle Sync + Build）
-- 🟡 进入 Day 1：编译运行 → 下载模型测试推理 → 裁剪项目
+- ✅ 预编译 .so 文件已获取并复制到 PoC 项目
+- ✅ build.gradle.kts 配置更新（ndk abiFilters + noCompress + Kotlin 插件 + 协程/Gson/RecyclerView 依赖）
+- ✅ 5 个 Fragment 布局 XML 创建完成（fragment_home/chat/rag/vision/voice.xml）
+- ✅ HomeFragment 实现：ViewBinding + 内存监控 + 模型状态显示
+- ✅ ChatFragment 实现：ViewBinding + RecyclerView + ChatMessageAdapter
+- ✅ RAGFragment / VisionFragment / VoiceFragment：ViewBinding 骨架就绪
+- ✅ item_chat_message.xml + bg_chat_bubble.xml 创建完成
+- 🟡 待验证编译通过（pull 最新代码后 Build）

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VisionFragment 布局：图片理解页 -->
+<!-- 上方图片预览 + 中间输入 + 下方结果 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 图片预览区域 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="📷 图片理解"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 图片预览框（默认显示占位文字） -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:background="#F5F5F5"
+        android:layout_marginBottom="8dp">
+
+        <ImageView
+            android:id="@+id/iv_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerInside"
+            android:contentDescription="选择的图片" />
+
+        <TextView
+            android:id="@+id/tv_image_placeholder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="点击下方按钮选择图片"
+            android:textColor="#999999" />
+
+    </FrameLayout>
+
+    <!-- 选择图片按钮 -->
+    <Button
+        android:id="@+id/btn_select_image"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="选择图片"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 问题输入框 -->
+    <EditText
+        android:id="@+id/et_vision_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="输入关于图片的问题（如：这是什么？）"
+        android:inputType="textMultiLine"
+        android:maxLines="3"
+        android:minHeight="48dp"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@android:drawable/edit_text" />
+
+    <!-- 提问按钮 -->
+    <Button
+        android:id="@+id/btn_vision_ask"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="提问"
+        android:layout_marginBottom="12dp" />
+
+    <!-- 结果显示区域 -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <TextView
+            android:id="@+id/tv_vision_result"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="等待输入..."
+            android:textSize="15sp"
+            android:lineSpacingExtra="4dp"
+            android:padding="8dp" />
+
+    </ScrollView>
+
+</LinearLayout>

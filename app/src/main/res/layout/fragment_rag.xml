@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RAGFragment 布局：RAG 问答页 -->
+<!-- 上方文档管理 + 下方问答对话 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- 文档管理区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="?attr/colorSurfaceVariant">
+
+        <TextView
+            android:id="@+id/tv_doc_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📚 已索引文档: 0 篇"
+            android:textSize="14sp"
+            android:gravity="center_vertical" />
+
+        <Button
+            android:id="@+id/btn_add_doc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="添加文档"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <!-- RAG 对话消息列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_rag_messages"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="8dp" />
+
+    <!-- 底部输入区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="?attr/colorSurfaceVariant">
+
+        <EditText
+            android:id="@+id/et_rag_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="基于文档提问..."
+            android:inputType="textMultiLine"
+            android:maxLines="3"
+            android:minHeight="48dp"
+            android:padding="12dp"
+            android:layout_marginEnd="8dp"
+            android:background="@android:drawable/edit_text" />
+
+        <Button
+            android:id="@+id/btn_rag_send"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="提问"
+            android:minHeight="48dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

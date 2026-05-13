@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HomeFragment 布局：系统状态页 -->
+<!-- ScrollView：内容超出屏幕时可滚动 -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- 垂直排列所有状态信息 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- ===== 区域 1：模型加载状态 ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📦 模型状态"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- LLM 模型状态 -->
+        <TextView
+            android:id="@+id/tv_llm_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="LLM: ⬜ 未加载"
+            android:textSize="15sp"
+            android:paddingVertical="4dp" />
+
+        <!-- 嵌入模型状态 -->
+        <TextView
+            android:id="@+id/tv_embedding_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="嵌入模型: ⬜ 未加载"
+            android:textSize="15sp"
+            android:paddingVertical="4dp" />
+
+        <!-- ASR 模型状态 -->
+        <TextView
+            android:id="@+id/tv_asr_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ASR: ⬜ 未加载"
+            android:textSize="15sp"
+            android:paddingVertical="4dp" />
+
+        <!-- TTS 模型状态 -->
+        <TextView
+            android:id="@+id/tv_tts_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TTS: ⬜ 未加载"
+            android:textSize="15sp"
+            android:paddingVertical="4dp" />
+
+        <!-- 多模态模型状态 -->
+        <TextView
+            android:id="@+id/tv_vision_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="多模态: ⬜ 未加载"
+            android:textSize="15sp"
+            android:paddingVertical="4dp" />
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:attr/listDivider"
+            android:layout_marginVertical="12dp" />
+
+        <!-- ===== 区域 2：内存使用 ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="💾 内存使用"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_memory_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="加载中..."
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:paddingVertical="4dp" />
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:attr/listDivider"
+            android:layout_marginVertical="12dp" />
+
+        <!-- ===== 区域 3：向量库信息 ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📊 向量库"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_vector_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="文档数: 0 | 向量数: 0"
+            android:textSize="14sp"
+            android:paddingVertical="4dp" />
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:attr/listDivider"
+            android:layout_marginVertical="12dp" />
+
+        <!-- ===== 区域 4：性能数据 ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚡ 性能数据"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_perf_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="暂无数据\n运行推理后显示 TTFT、tok/s 等指标"
+            android:textSize="14sp"
+            android:lineSpacingExtra="4dp"
+            android:paddingVertical="4dp" />
+
+    </LinearLayout>
+</ScrollView>

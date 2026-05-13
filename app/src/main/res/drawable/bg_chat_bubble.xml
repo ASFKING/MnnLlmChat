@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- bg_chat_bubble.xml：聊天气泡背景 -->
+<!-- 圆角矩形，浅灰色背景 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- 填充颜色：浅灰色 -->
+    <solid android:color="#F0F0F0" />
+    <!-- 圆角半径：12dp 让四角变圆 -->
+    <corners android:radius="12dp" />
+    <!-- 内边距（备用，布局里已设 padding） -->
+    <padding
+        android:left="2dp"
+        android:top="2dp"
+        android:right="2dp"
+        android:bottom="2dp" />
+</shape>
