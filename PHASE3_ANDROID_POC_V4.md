@@ -1899,15 +1899,15 @@ Sherpa-MNN ASR/TTS 参考：
 
 > **创建日期**：2026-05-12
 > **最后更新**：2026-05-13
-> **当前阶段**：Day 1 进行中
+> **当前阶段**：Day 1 进行中（⚠️ 阻塞：模拟器架构不兼容）
 
 ### D.1 总览
 
 | 阶段 | 名称 | 状态 | 完成度 |
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
-| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 10% |
-| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 60% |
+| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ❌ 阻塞 | 40% |
+| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 80% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
@@ -1940,9 +1940,9 @@ Sherpa-MNN ASR/TTS 参考：
 |---|------|------|----------|------|
 | 1.1 | 下载 MNN 预编译 .so（libmnn.so + libmnnllmapp.so） | ✅ | 2026-05-13 | libMNN.so + libmnnllmapp.so 已就位 |
 | 1.2 | 下载 Sherpa-MNN 预编译 .so | ✅ | 2026-05-13 | libsherpa-mnn-jni.so + libmnn_tts.so 已就位 |
-| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | 🟡 | — | .so 已放入 jniLibs，待编译运行 |
-| 1.4 | 替换 .so 为预编译版本，编译运行 | 🟡 | — | 待 Gradle Sync + Build |
-| 1.5 | 下载一个模型并测试推理 | ⬜ | — | |
+| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | ✅ | 2026-05-13 | 项目可打开 |
+| 1.4 | 替换 .so 为预编译版本，编译运行 | 🟡 | — | .so 路径嵌套问题已修复，待验证 Build |
+| 1.5 | 下载一个模型并测试推理 | ❌ | — | 阻塞：模拟器为 x86_64，无法加载 arm64 .so |
 | 1.6 | 理解 MnnLlmChat 的代码结构 | ⬜ | — | |
 | 1.7 | 复制项目为独立目录，修改包名 | ✅ | 2026-05-12 | 已有独立项目 `com.poc.ondevice` |
 | 1.8 | 删除不需要的代码（见删除清单） | ⬜ | — | |
@@ -1958,7 +1958,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | ✅ | 2026-05-13 | 5 个布局 XML + ViewBinding Fragment 已完成 |
 | 2.6 | 实现 HomeFragment（系统状态页） | ✅ | 2026-05-13 | 含内存监控、模型状态显示 |
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | ✅ | 2026-05-13 | 含 ChatMessageAdapter + RecyclerView |
-| 2.8 | 实现 MemoryMonitor 工具类 | ⬜ | — | |
+| 2.8 | 实现 MemoryMonitor 工具类 | ✅ | 2026-05-13 | 集成在 HomeFragment 中 |
 | 2.9 | 实现 PerformanceTracker 工具类 | ⬜ | — | |
 
 ### D.5 Day 3：嵌入模型集成
@@ -2071,12 +2071,15 @@ Sherpa-MNN ASR/TTS 参考：
 |------|----------|----------|------|
 | 2026-05-12 | git push 被拒（远程有 README） | `git pull origin main --allow-unrelated-histories` 合并后推送 | 2min |
 | 2026-05-12 | .idea/ 目录混入 git 暂存区 | `git rm -r --cached .idea` + `.gitignore` 追加 `/.idea/` | 2min |
+| 2026-05-13 | .so 文件路径嵌套：`jniLibs/arm64-v8a/jniLibs/arm64-v8a/*.so`，导致构建系统找不到库 | 将 .so 移到 `jniLibs/arm64-v8a/` 根目录，删除多余嵌套 | 5min |
+| 2026-05-13 | 模拟器架构不兼容：Pixel 8 AVD 为 x86_64，无法加载 arm64 .so | 需创建 arm64 模拟器或改用真机调试 | 阻塞中 |
 
 ### D.15 关键决策记录
 
 | 日期 | 决策 | 理由 |
 |------|------|------|
 | 2026-05-12 | 项目包名使用 `com.poc.ondevice` | 与设计方案一致 |
+| 2026-05-13 | 测试设备需使用 arm64 架构 | .so 文件为 arm64-v8a，x86_64 模拟器不兼容 |
 
 ### D.16 每日进度摘要
 
@@ -2096,4 +2099,7 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ ChatFragment 实现：ViewBinding + RecyclerView + ChatMessageAdapter
 - ✅ RAGFragment / VisionFragment / VoiceFragment：ViewBinding 骨架就绪
 - ✅ item_chat_message.xml + bg_chat_bubble.xml 创建完成
+- ✅ .so 路径嵌套问题发现并修复
+- ❌ 发现模拟器架构阻塞：Pixel 8 AVD 为 x86_64，arm64 .so 无法加载
+- ⏳ 待解决：需要创建 arm64 模拟器或改用真机
 - 🟡 待验证编译通过（pull 最新代码后 Build）
