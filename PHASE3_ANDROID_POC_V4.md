@@ -1906,7 +1906,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 阶段 | 名称 | 状态 | 完成度 |
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
-| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 10% |
+| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 50% |
 | Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 60% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
@@ -1940,8 +1940,8 @@ Sherpa-MNN ASR/TTS 参考：
 |---|------|------|----------|------|
 | 1.1 | 下载 MNN 预编译 .so（libmnn.so + libmnnllmapp.so） | ✅ | 2026-05-13 | libMNN.so + libmnnllmapp.so 已就位 |
 | 1.2 | 下载 Sherpa-MNN 预编译 .so | ✅ | 2026-05-13 | libsherpa-mnn-jni.so + libmnn_tts.so 已就位 |
-| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | 🟡 | — | .so 已放入 jniLibs，待编译运行 |
-| 1.4 | 替换 .so 为预编译版本，编译运行 | 🟡 | — | 待 Gradle Sync + Build |
+| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | ✅ | 2026-05-13 | Gradle Sync 成功 |
+| 1.4 | 替换 .so 为预编译版本，编译运行 | ✅ | 2026-05-13 | 编译通过，修复了裁剪残留依赖 |
 | 1.5 | 下载一个模型并测试推理 | ⬜ | — | |
 | 1.6 | 理解 MnnLlmChat 的代码结构 | ⬜ | — | |
 | 1.7 | 复制项目为独立目录，修改包名 | ✅ | 2026-05-12 | 已有独立项目 `com.poc.ondevice` |
@@ -2073,6 +2073,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-12 | .idea/ 目录混入 git 暂存区 | `git rm -r --cached .idea` + `.gitignore` 追加 `/.idea/` | 2min |
 | 2026-05-13 | ChatDataItem.kt 引用已删除的 chatlist 包 | 删除 import，内联 USER/ASSISTANT 常量 | 5min |
 | 2026-05-13 | 裁剪后 mls.api/modelist/qnn/benchmark 包缺失 | 创建 9 个桩类 + App.kt + Timber 依赖 | 15min |
+| 2026-05-13 | ModelUtils.kt 引用 modelmarket/R.drawable 等缺失资源 | 重写为精简版，删除不需要的功能 | 10min |
 
 ### D.15 关键决策记录
 
@@ -2102,4 +2103,5 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 新建 App.kt（Application 入口，初始化 ApplicationProvider）
 - ✅ AndroidManifest.xml 注册 App 类 + 录音权限
 - ✅ 添加 Timber 日志库依赖
-- 🟡 待在 Android Studio 中 Build 验证编译通过
+- ✅ 重写 ModelUtils.kt，删除对 modelmarket/R.drawable 等缺失资源的依赖
+- ✅ Android Studio 编译通过（Gradle Sync + Build 成功）
