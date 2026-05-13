@@ -3,8 +3,6 @@
 package com.alibaba.mnnllm.android.chat.model
 
 import android.net.Uri
-import com.alibaba.mnnllm.android.chat.chatlist.AudioPlayerComponent
-import com.alibaba.mnnllm.android.chat.chatlist.ChatViewHolders
 import java.io.File
 
 class ChatDataItem {
@@ -13,8 +11,6 @@ class ChatDataItem {
 
     @JvmField
     var time: String? = null
-    @JvmField
-    var audioPlayComponent: AudioPlayerComponent? = null
     @JvmField
     var text: String? = null
     var type: Int
@@ -88,15 +84,20 @@ class ChatDataItem {
     }
 
     companion object {
+        // 消息类型常量（替代已删除的 ChatViewHolders）
+        const val USER = 0       // 用户消息
+        const val ASSISTANT = 1  // AI 回复
+        const val SYSTEM = 2     // 系统消息
+
         fun createImageInputData(timeString: String?, text: String?, imageUris: List<Uri>?): ChatDataItem {
-            val result = ChatDataItem(timeString, ChatViewHolders.USER, text)
+            val result = ChatDataItem(timeString, USER, text)
             result.imageUris = imageUris
             return result
         }
 
         @Deprecated("Use createImageInputData with list")
         fun createImageInputData(timeString: String?, text: String?, imageUri: Uri?): ChatDataItem {
-            val result = ChatDataItem(timeString, ChatViewHolders.USER, text)
+            val result = ChatDataItem(timeString, USER, text)
             result.imageUri = imageUri
             return result
         }
@@ -107,7 +108,7 @@ class ChatDataItem {
             audioPath: String,
             duration: Float
         ): ChatDataItem {
-            val result = ChatDataItem(timeString, ChatViewHolders.USER, text)
+            val result = ChatDataItem(timeString, USER, text)
             result.audioUri = Uri.fromFile(File(audioPath))
             result.audioDuration = duration
             return result
@@ -118,7 +119,7 @@ class ChatDataItem {
             text: String?,
             videoPath: String
         ): ChatDataItem {
-            val result = ChatDataItem(timeString, ChatViewHolders.USER, text)
+            val result = ChatDataItem(timeString, USER, text)
             result.videoUri = Uri.fromFile(File(videoPath))
             return result
         }

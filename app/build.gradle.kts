@@ -73,6 +73,9 @@ dependencies {
     // Gson（JSON 序列化，结构化提取 + 数据存储用）
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // Timber（日志库，原始 MNN 代码使用，比 Log.d 更方便）
+    implementation("com.jakewharton.timber:timber:5.0.1")
+
     // 测试
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
