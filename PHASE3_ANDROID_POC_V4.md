@@ -1938,13 +1938,13 @@ Sherpa-MNN ASR/TTS 参考：
 
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
-| 1.1 | 下载 MNN 预编译 .so（libmnn.so + libmnnllmapp.so） | ⬜ | — | |
-| 1.2 | 下载 Sherpa-MNN 预编译 .so | ⬜ | — | |
-| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | ⬜ | — | |
-| 1.4 | 替换 .so 为预编译版本，编译运行 | ⬜ | — | |
+| 1.1 | 下载 MNN 预编译 .so（libmnn.so + libmnnllmapp.so） | ✅ | 2026-05-13 | libMNN.so + libmnnllmapp.so 已就位 |
+| 1.2 | 下载 Sherpa-MNN 预编译 .so | ✅ | 2026-05-13 | libsherpa-mnn-jni.so + libmnn_tts.so 已就位 |
+| 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | 🟡 | — | .so 已放入 jniLibs，待编译运行 |
+| 1.4 | 替换 .so 为预编译版本，编译运行 | 🟡 | — | 待 Gradle Sync + Build |
 | 1.5 | 下载一个模型并测试推理 | ⬜ | — | |
 | 1.6 | 理解 MnnLlmChat 的代码结构 | ⬜ | — | |
-| 1.7 | 复制项目为独立目录，修改包名 | ⬜ | — | 已有独立项目 `com.poc.ondevice` |
+| 1.7 | 复制项目为独立目录，修改包名 | ✅ | 2026-05-12 | 已有独立项目 `com.poc.ondevice` |
 | 1.8 | 删除不需要的代码（见删除清单） | ⬜ | — | |
 
 ### D.4 Day 2：ViewBinding + XML 搭 UI 骨架
@@ -2089,4 +2089,7 @@ Sherpa-MNN ASR/TTS 参考：
 
 #### 2026-05-13（Day 1 启动）
 - ✅ MNN 官方仓库已克隆（`git clone --depth 1`）
-- 🟡 进入 Day 1：下载预编译 .so → 跑通 MnnLlmChat → 裁剪
+- ✅ 预编译 .so 文件已获取：libMNN.so、libmnnllmapp.so、libsherpa-mnn-jni.so、libmnn_tts.so、libc++_shared.so 等共 13 个
+- ✅ .so 文件已放入 `jniLibs/arm64-v8a/` 目录
+- 🟡 待编译运行 MnnLlmChat（Gradle Sync + Build）
+- 🟡 进入 Day 1：编译运行 → 下载模型测试推理 → 裁剪项目
