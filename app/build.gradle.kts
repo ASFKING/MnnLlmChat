@@ -67,7 +67,7 @@ dependencies {
     implementation(libs.material)
 
     // RecyclerView（消息列表必须）
-    implementation(libs.androidx.recyclerview)
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 
     // Kotlin 协程（异步编程，LLM 流式生成必须）
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
