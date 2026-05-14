@@ -1898,16 +1898,16 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-13
-> **当前阶段**：Day 1 进行中
+> **最后更新**：2026-05-14
+> **当前阶段**：Day 2 收尾中（MemoryMonitor + PerformanceTracker 待实现）
 
 ### D.1 总览
 
 | 阶段 | 名称 | 状态 | 完成度 |
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
-| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | 🟡 进行中 | 60% |
-| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 60% |
+| Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ✅ 已完成 | 100% |
+| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 80% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
@@ -1943,9 +1943,9 @@ Sherpa-MNN ASR/TTS 参考：
 | 1.3 | 用 Android Studio 打开 MnnLlmChat 项目 | ✅ | 2026-05-13 | Gradle Sync 成功 |
 | 1.4 | 替换 .so 为预编译版本，编译运行 | ✅ | 2026-05-13 | 编译通过，修复了裁剪残留依赖 |
 | 1.5 | 下载一个模型并测试推理 | ✅ | 2026-05-13 | Qwen3-0.6B 下载成功，页面显示已下载 |
-| 1.6 | 理解 MnnLlmChat 的代码结构 | ⬜ | — | |
+| 1.6 | 理解 MnnLlmChat 的代码结构 | ✅ | 2026-05-14 | 已理解 MNN→JNI→LlmSession→LlmService→Flow 的完整链路 |
 | 1.7 | 复制项目为独立目录，修改包名 | ✅ | 2026-05-12 | 已有独立项目 `com.poc.ondevice` |
-| 1.8 | 删除不需要的代码（见删除清单） | ⬜ | — | |
+| 1.8 | 删除不需要的代码（见删除清单） | ✅ | 2026-05-14 | 已裁剪并补全全部双层注释（37 个文件） |
 
 ### D.4 Day 2：ViewBinding + XML 搭 UI 骨架
 
@@ -2108,3 +2108,11 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ Android Studio 编译通过（Gradle Sync + Build 成功）
 - ✅ App 安装到实体手机成功
 - ✅ Qwen3-0.6B 模型下载成功，页面显示已下载
+
+#### 2026-05-14（Day 1 收尾 + Day 2 收尾）
+- ✅ 理解 MnnLlmChat 完整代码结构（MNN→JNI→LlmSession→LlmService→Flow）
+- ✅ 裁剪项目完成，删除不需要的代码
+- ✅ 补全全部 37 个 Kotlin 文件的双层注释（语法注释 + 业务注释）
+- ✅ 注释覆盖：PoC 核心层、MNN 引擎层、模型配置层、工具类层、桩类层
+- ⬜ MemoryMonitor 工具类待实现（Day 2 任务 2.8）
+- ⬜ PerformanceTracker 工具类待实现（Day 2 任务 2.9）
