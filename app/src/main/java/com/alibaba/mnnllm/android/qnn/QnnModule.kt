@@ -3,7 +3,9 @@ package com.alibaba.mnnllm.android.qnn
 /**
  * QnnModule：高通 QNN（Qualcomm Neural Network）NPU 适配模块
  *
- * 原始 MNN 项目中，这个类负责高通 NPU 的模型加载和推理。
+ * 一句话：高通手机的 NPU（神经网络处理器）加速接口。
+ * 生活类比：就像显卡之于游戏——NPU 之于 AI 推理，专用硬件比通用 CPU 更快。
+ *
  * PoC 阶段不做 NPU 适配，这个桩类只为了让 LlmSession 编译通过。
  *
  * 为什么 PoC 不做 NPU？
@@ -14,7 +16,7 @@ package com.alibaba.mnnllm.android.qnn
 object QnnModule {
 
     /**
-     * 获取模型中间名称（用于 QNN 模型文件名拼接）
+     * modelMiddleName：获取 QNN 模型的中间名称
      *
      * 在 LlmSession 中，如果是 QNN 模型，会用这个方法拼接 visual model 的文件名：
      * llmConfig.visualModel = "visual_qnn_${QnnModule.modelMiddleName()}.mnn"

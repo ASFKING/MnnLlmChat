@@ -25,8 +25,12 @@ class App : Application() {
      * 在这里做全局初始化，比在每个 Activity 里重复初始化更高效
      */
     override fun onCreate() {
+        // super.onCreate()：调用父类 Application 的 onCreate
+        // Kotlin 中，子类重写父类方法时必须先调用 super
         super.onCreate()
+
         // 初始化 ApplicationProvider，让全局代码能拿到 Application Context
+        // this = 当前 Application 实例
         // 这样 ModelConfig、MmapUtils 等文件中的 ApplicationProvider.get() 就不会报错
         ApplicationProvider.init(this)
     }

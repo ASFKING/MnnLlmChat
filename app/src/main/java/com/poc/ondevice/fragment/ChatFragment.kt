@@ -19,7 +19,7 @@ import com.poc.ondevice.databinding.FragmentChatBinding
  * - 结构化提取（Day 5 实现）
  * - 文档生成（Day 5 实现）
  *
- * 当前状态：UI 骨架就绪，LLM 推理逻辑待 Day 1 完成后接入
+ * 当前状态：UI 骨架就绪，LLM 推理逻辑待后续接入
  */
 
 // data class：Kotlin 数据类，自动生成 equals()、hashCode()、toString()、copy()
@@ -30,13 +30,23 @@ data class ChatMessage(
     val content: String    // 消息文本
 )
 
+/**
+ * ChatFragment：文本对话页面
+ *
+ * 在我们的项目中：
+ * - 用户在这里输入文字，发送给 LLM 模型
+ * - LLM 的流式回答实时显示在 RecyclerView 消息列表中
+ * - 后续会接入结构化提取（JSON 输出）和文档生成功能
+ */
 class ChatFragment : Fragment() {
 
+    // _binding 和 binding 的双变量模式（Fragment ViewBinding 标准写法）
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
 
     // mutableListOf()：创建一个可变的空列表
     // 与 listOf() 的区别：mutableListOf 可以后续添加/删除元素
+    // 这里存储所有聊天消息
     private val messages = mutableListOf<ChatMessage>()
 
     // lateinit：延迟初始化，声明时不赋值，但保证在使用前一定会初始化
@@ -53,6 +63,9 @@ class ChatFragment : Fragment() {
         return binding.root
     }
 
+    /**
+     * onViewCreated：View 创建完毕，初始化 UI 组件
+     */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -60,11 +73,11 @@ class ChatFragment : Fragment() {
         setupRecyclerView()
 
         // 发送按钮点击事件
-        // setOnClickListener：设置点击回调
-        // lambda 表达式 { ... } 是回调函数
         binding.btnSend.setOnClickListener {
+            // .text.toString()：获取 EditText 的文本内容
+            // .trim()：去除首尾空白字符
             val input = binding.etInput.text.toString().trim()
-            // isBlank()：检查字符串是否为空或只包含空白字符
+            // isNotBlank()：检查字符串是否为空或只包含空白字符
             // 与 isEmpty() 的区别：isEmpty 只检查长度，isBlank 还检查空白
             if (input.isNotBlank()) {
                 sendMessage(input)
@@ -80,10 +93,12 @@ class ChatFragment : Fragment() {
      * 2. Adapter：负责把数据绑定到 item 的 View 上
      */
     private fun setupRecyclerView() {
+        // 创建 Adapter，传入消息列表
         adapter = ChatMessageAdapter(messages)
         // LinearLayoutManager：线性排列，垂直滚动
         // 类似 ScrollView 里的 LinearLayout，但只渲染可见 item
         binding.rvMessages.layoutManager = LinearLayoutManager(requireContext())
+        // 把 Adapter 设置给 RecyclerView
         binding.rvMessages.adapter = adapter
     }
 
@@ -99,9 +114,11 @@ class ChatFragment : Fragment() {
         // 比 notifyDataSetChanged() 更高效（只更新新增的 item，不刷新整个列表）
         adapter.notifyItemInserted(messages.size - 1)
         // 滚动到底部，让用户看到新消息
+        // smoothScrollToPosition：平滑滚动（有动画效果）
         binding.rvMessages.smoothScrollToPosition(messages.size - 1)
 
         // 清空输入框
+        // .text 是 Editable? 类型，所以用 ?. 安全调用
         binding.etInput.text?.clear()
 
         // TODO: 这里后续接入 LLMEngine，发送到模型并流式显示回复
@@ -155,11 +172,9 @@ class ChatMessageAdapter(
      *
      * 调用时机：RecyclerView 需要一个新的 item View 时（首次显示或回收池为空时）
      *
-     * 参数：
-     * - parent：RecyclerView 本身（用来获取 context 和 layout params）
-     * - viewType：item 类型（用于多种 item 样式的场景，这里只有一种）
-     *
-     * 返回：一个新的 ViewHolder
+     * @param parent RecyclerView 本身（用来获取 context 和 layout params）
+     * @param viewType item 类型（用于多种 item 样式的场景，这里只有一种）
+     * @return 一个新的 ViewHolder
      */
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         // LayoutInflater.from(context)：从 parent 的 context 获取布局填充器
@@ -178,11 +193,11 @@ class ChatMessageAdapter(
      * 调用时机：RecyclerView 需要把某个 position 的数据绑定到 ViewHolder 时
      * 这里也包括 ViewHolder 被回收后复用时（position 变了，View 要更新内容）
      *
-     * 参数：
-     * - holder：要绑定数据的 ViewHolder
-     * - position：数据在列表中的位置（从 0 开始）
+     * @param holder 要绑定数据的 ViewHolder
+     * @param position 数据在列表中的位置（从 0 开始）
      */
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        // 获取当前位置的消息
         val message = messages[position]
         // 根据 sender 类型设置不同的显示样式
         holder.tvSender.text = if (message.sender == "user") "你" else "AI"

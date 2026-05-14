@@ -12,10 +12,13 @@ package com.poc.ondevice.download
  * @param sizeGB     模型大小（GB），用于 UI 显示预估下载时间
  * @param modelDirName 模型在本地存储的目录名
  */
+// data class：Kotlin 数据类
+// 自动生成 equals()、hashCode()、toString()、copy() 方法
+// 适合用来表示"纯数据"的对象（没有复杂业务逻辑）
 data class ModelEntry(
-    val modelId: String,
-    val displayName: String,
-    val description: String,
-    val sizeGB: Double,
-    val modelDirName: String
+    val modelId: String,      // ModelScope 仓库 ID，如 "MNN/Qwen3-1.7B-MNN"
+    val displayName: String,   // UI 显示名，如 "Qwen3-1.7B"
+    val description: String,   // 模型描述文字
+    val sizeGB: Double,        // 模型大小（GB），用于下载前预估
+    val modelDirName: String   // 本地目录名，如 "Qwen3-1.7B-MNN"
 )

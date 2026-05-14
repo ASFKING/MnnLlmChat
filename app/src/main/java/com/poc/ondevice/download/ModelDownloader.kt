@@ -29,7 +29,11 @@ import java.net.URL
  */
 class ModelDownloader(private val context: Context) {
 
+    // companion object：Kotlin 的伴生对象，类似 Java 的 static 成员
+    // 里面的属性和方法属于类本身，不属于实例
     companion object {
+        // private const val：编译时常量，只能在 companion object 中声明
+        // const 要求值必须在编译时就能确定（不能是变量或函数返回值）
         private const val TAG = "ModelDownloader"
 
         // ModelScope API 基础地址
@@ -45,6 +49,8 @@ class ModelDownloader(private val context: Context) {
 
     // 模型存储根目录：/data/data/com.poc.ondevice/files/models/
     // context.filesDir → App 私有目录的 files 子目录
+    // .apply { mkdirs() } → 创建 File 对象的同时，如果目录不存在就创建它
+    // apply 是 Kotlin 的作用域函数，在对象上调用 lambda，返回对象本身
     private val modelsDir = File(context.filesDir, "models").apply { mkdirs() }
 
     // Gson 实例：用于 JSON 解析
@@ -58,6 +64,8 @@ class ModelDownloader(private val context: Context) {
      * @return 模型在手机上的完整路径
      */
     fun getModelPath(modelDirName: String): File {
+        // File(parent, child)：在 parent 目录下创建子路径
+        // 结果：/data/data/com.poc.ondevice/files/models/Qwen3-1.7B-MNN
         return File(modelsDir, modelDirName)
     }
 
@@ -69,7 +77,10 @@ class ModelDownloader(private val context: Context) {
      */
     fun isModelDownloaded(modelDirName: String): Boolean {
         val dir = getModelPath(modelDirName)
-        // 检查目录存在且不为空（至少有一个文件）
+        // exists()：检查文件/目录是否存在
+        // listFiles()：列出目录下的所有文件，返回 Array<File>?（目录为空或不存在时返回 null）
+        // ?.isNotEmpty()：安全调用 + Elvis 操作符，null 时返回 null
+        // == true：因为整个表达式可能为 null（?.链式调用），所以用 == true 而不是直接返回
         return dir.exists() && dir.listFiles()?.isNotEmpty() == true
     }
 
@@ -95,7 +106,10 @@ class ModelDownloader(private val context: Context) {
         // withContext(Dispatchers.IO)：切换到 IO 线程池
         // 网络请求和文件写入是 IO 密集型操作，不能在主线程执行
         // 否则会触发 Android 的 NetworkOnMainThreadException
+        // Dispatchers.IO 专门用于网络/文件等 IO 操作，线程池较大
         withContext(Dispatchers.IO) {
+            // try-catch：Kotlin 的异常处理
+            // try 块中的代码如果抛出异常，会被 catch 块捕获
             try {
                 val modelDir = getModelPath(model.modelDirName)
 
@@ -103,6 +117,8 @@ class ModelDownloader(private val context: Context) {
                 if (isModelDownloaded(model.modelDirName)) {
                     Log.d(TAG, "Model already downloaded: ${model.modelDirName}")
                     onComplete(modelDir)
+                    // return@withContext：从 lambda 中返回（不是从函数返回）
+                    // 类比：从 withContext 这个"子任务"中退出
                     return@withContext
                 }
 
@@ -114,22 +130,26 @@ class ModelDownloader(private val context: Context) {
                     return@withContext
                 }
 
-                // 计算总大小
+                // sumOf {}：对列表中每个元素执行 lambda，把结果加起来
+                // 这里是计算所有文件的总大小
                 val totalSize = files.sumOf { it.size }
                 var downloadedSize = 0L
 
-                // 创建模型目录
+                // 创建模型目录（包括所有父目录）
                 modelDir.mkdirs()
 
                 // Step 2: 逐个下载文件
                 for (fileInfo in files) {
+                    // 目标文件路径：模型目录 + 文件在仓库中的相对路径
                     val targetFile = File(modelDir, fileInfo.path)
+                    // parentFile：获取父目录
+                    // ?.mkdirs()：安全调用，如果父目录不为 null 就创建
                     targetFile.parentFile?.mkdirs()
 
                     // 如果文件已存在且大小匹配，跳过（支持断点续传的基础）
                     if (targetFile.exists() && targetFile.length() == fileInfo.size) {
                         downloadedSize += fileInfo.size
-                        continue
+                        continue  // continue：跳过本次循环，进入下一次
                     }
 
                     // 下载单个文件
@@ -138,6 +158,7 @@ class ModelDownloader(private val context: Context) {
                         filePath = fileInfo.path,
                         targetFile = targetFile,
                         onFileProgress = { fileDownloaded ->
+                            // 更新总进度：已下载的文件大小 + 当前文件已下载的大小
                             onProgress(
                                 downloadedSize + fileDownloaded,
                                 totalSize,
@@ -153,6 +174,7 @@ class ModelDownloader(private val context: Context) {
                 onComplete(modelDir)
 
             } catch (e: Exception) {
+                // 捕获所有异常，通知调用方
                 Log.e(TAG, "Download failed", e)
                 onError("下载失败: ${e.message}")
             }
@@ -169,7 +191,7 @@ class ModelDownloader(private val context: Context) {
      *   "Data": {
      *     "Files": [
      *       { "Path": "config.json", "Size": 1234, "Sha256": "abc...", "Type": "blob" },
-     *       { "Path": "subdir/file.bin", "Size": 5678, "Sha256": "def...", "Type": "blob" }
+     *       { "Path": "subdir/file.bin", "Size": 5678, "Sha256": "def...", "Type": "tree" }
      *     ]
      *   }
      * }
@@ -178,9 +200,12 @@ class ModelDownloader(private val context: Context) {
      * @return 文件信息列表
      */
     private suspend fun fetchRepoFiles(modelId: String): List<RepoFileInfo> {
+        // withContext(Dispatchers.IO)：确保网络操作在 IO 线程执行
         return withContext(Dispatchers.IO) {
             // split("/") 把 "MNN/Qwen3-1.7B-MNN" 拆成 ["MNN", "Qwen3-1.7B-MNN"]
             val parts = modelId.split("/")
+            // require()：如果条件不满足，抛出 IllegalArgumentException
+            // 与 check() 的区别：require 用于参数校验，check 用于状态校验
             require(parts.size == 2) { "modelId 格式错误，应为 'group/repo'" }
 
             val group = parts[0]  // "MNN"
@@ -194,33 +219,38 @@ class ModelDownloader(private val context: Context) {
             // HttpURLConnection 是 Java 标准库的 HTTP 客户端
             // 虽然不如 OkHttp 功能丰富，但零依赖，够用
             val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 15000  // 连接超时 15 秒
-            conn.readTimeout = 30000     // 读取超时 30 秒
+            // as HttpURLConnection：类型转换（Java 中用 (HttpURLConnection) cast）
+            conn.requestMethod = "GET"              // HTTP 方法
+            conn.connectTimeout = 15000              // 连接超时 15 秒
+            conn.readTimeout = 30000                 // 读取超时 30 秒
 
             try {
                 // 检查 HTTP 响应码
+                // 200 = 成功，其他都是错误
                 if (conn.responseCode != 200) {
                     throw Exception("API 请求失败: HTTP ${conn.responseCode}")
                 }
 
                 // 读取响应体
-                // conn.inputStream → 网络响应的输入流
+                // conn.inputStream → 网络响应的输入流（字节流）
                 // bufferedReader() → 包装成带缓冲的字符流（提高读取效率）
                 // readText() → 一次性读取全部文本
                 val responseText = conn.inputStream.bufferedReader().readText()
 
                 // JSON 反序列化：把 JSON 字符串转成 Kotlin 对象
                 // Gson().fromJson(json, Type) → 自动映射字段名
+                // 配合 @SerializedName 注解，可以处理 JSON 字段名与 Kotlin 属性名不同的情况
                 val response = gson.fromJson(responseText, MsRepoResponse::class.java)
 
                 // 过滤掉 tree 类型（目录），只保留实际文件
                 // ?. 安全调用：如果 response.Data 为 null，整个表达式返回 null
                 // ?: Elvis 操作符：如果左边为 null，返回右边的默认值
+                // filter {}：过滤列表，只保留 lambda 返回 true 的元素
                 response.data?.files?.filter { it.type != "tree" } ?: emptyList()
             } finally {
                 // finally 块：无论成功还是失败都会执行
                 // 断开连接，释放网络资源
+                // 类比：用完水龙头后一定要关掉
                 conn.disconnect()
             }
         }
@@ -246,7 +276,8 @@ class ModelDownloader(private val context: Context) {
             val repo = parts[1]
 
             // 文件下载 URL
-            // 结果：https://modelscope.cn/api/v1/models/MNN/Qwen3-1.7B-MNN/repo?FilePath=config.json
+            // URLEncoder.encode：把文件路径中的特殊字符编码成 URL 安全格式
+            // 例如空格变成 %20，中文变成 %XX%XX
             val encodedPath = java.net.URLEncoder.encode(filePath, "UTF-8")
             val url = URL("$MS_DOWNLOAD_BASE/$group/$repo/repo?FilePath=$encodedPath")
 
@@ -263,6 +294,7 @@ class ModelDownloader(private val context: Context) {
                 }
 
                 val inputStream = conn.inputStream
+                // FileOutputStream：文件输出流，用于写文件
                 val outputStream = FileOutputStream(targetFile)
 
                 // 流式读写：每次读 8KB，避免一次性加载大文件到内存
@@ -273,7 +305,10 @@ class ModelDownloader(private val context: Context) {
 
                 // inputStream.read(buffer) → 读取数据到 buffer，返回实际读取的字节数
                 // -1 表示读取结束
+                // .also { bytesRead = it } → 把 read 的返回值同时赋给 bytesRead
                 while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    // write(buffer, 0, bytesRead) → 写入 bytesRead 个字节
+                    // 不是写整个 buffer，因为最后一块可能不满 8KB
                     outputStream.write(buffer, 0, bytesRead)
                     downloaded += bytesRead
                     onFileProgress(downloaded)
@@ -308,9 +343,9 @@ class ModelDownloader(private val context: Context) {
     /**
      * MsRepoResponse：ModelScope API 的文件列表响应
      *
-     * 数据类（data class）：Kotlin 自动生成 equals/hashCode/toString/copy
      * @SerializedName：Gson 注解，指定 JSON 字段名和 Kotlin 属性名的映射
      * 因为 ModelScope API 返回的 JSON 用大写开头（如 "Code"），而 Kotlin 惯例用小写
+     * 注解告诉 Gson：JSON 里的 "Code" 对应 Kotlin 的 code 属性
      */
     data class MsRepoResponse(
         @SerializedName("Code") val code: Int = -1,

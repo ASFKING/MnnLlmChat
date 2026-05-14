@@ -8,16 +8,24 @@ import com.alibaba.mnnllm.android.modelsettings.ModelConfig
 import com.google.gson.Gson
 import java.util.HashMap
 
+/**
+ * SanaSession：Sana 图像生成会话
+ *
+ * Sana 是一种高效的图像生成模型（比 Stable Diffusion 更快）。
+ * 与 DiffusionSession 类似，但使用不同的推理流程。
+ *
+ * PoC 阶段不使用图像生成，这个类只为了让 ChatService 编译通过。
+ */
 class SanaSession(
     private val modelId: String,
     override var sessionId: String,
     private val configPath: String,
     private var savedHistory: List<ChatDataItem>? = null
 ) : ChatSession {
-    
+
     override var supportOmni: Boolean = false
     override val debugInfo: String = ""
-    
+
     private var nativePtr: Long = 0
     @Volatile
     private var releaseRequested = false
@@ -39,10 +47,7 @@ class SanaSession(
             put("image_height", config?.imageHeight ?: 512)
             put("grid_size", config?.gridSize ?: 1)
         }
-        nativePtr = initNative(
-            configPath,
-            Gson().toJson(configMap)
-        )
+        nativePtr = initNative(configPath, Gson().toJson(configMap))
         Log.d(TAG, "SanaSession load() nativePtr initialized: $nativePtr")
         if (releaseRequested) {
             release()
@@ -70,22 +75,15 @@ class SanaSession(
             val seed = params["randomSeed"] as Int
             val useCfg = params["useCfg"] as? Boolean ?: true
             val cfgScale = (params["cfgScale"] as? Number)?.toFloat() ?: 4.5f
+
             val result = generateNative(
-                nativePtr,
-                prompt,
-                imageInput,
-                output,
-                steps,
-                seed,
-                useCfg,
-                cfgScale,
-                progressListener
+                nativePtr, prompt, imageInput, output,
+                steps, seed, useCfg, cfgScale, progressListener
             ) ?: HashMap<String, Any>().apply {
                 put("error", true)
                 put("message", "Native generation returned null")
             }
 
-            // Check success flag from native
             if (result["success"] == false) {
                 Log.e(TAG, "Native generation failed: ${result["message"]}")
             }
@@ -111,7 +109,7 @@ class SanaSession(
             }
         }
     }
-    
+
     private fun releaseInner() {
         if (nativePtr != 0L) {
             releaseNative(nativePtr)
@@ -120,35 +118,19 @@ class SanaSession(
         }
     }
 
-    override fun setKeepHistory(keepHistory: Boolean) {
-        // Sana session does not support history
-    }
-
-    override fun setEnableAudioOutput(enable: Boolean) {
-        // Not used
-    }
-
+    override fun setKeepHistory(keepHistory: Boolean) {}
+    override fun setEnableAudioOutput(enable: Boolean) {}
     override fun getHistory(): List<ChatDataItem>? = savedHistory
+    override fun setHistory(history: List<ChatDataItem>?) { savedHistory = history }
+    override fun updateThinking(thinking: Boolean) {}
 
-    override fun setHistory(history: List<ChatDataItem>?) {
-        savedHistory = history
-    }
-
-    override fun updateThinking(thinking: Boolean) {
-    }
-
+    // ===== JNI 原生方法 =====
     private external fun initNative(resourcePath: String, configJson: String): Long
     private external fun releaseNative(instanceId: Long)
     private external fun generateNative(
-        instanceId: Long,
-        prompt: String,
-        imagePath: String,
-        outputPath: String,
-        steps: Int,
-        seed: Int,
-        useCfg: Boolean,
-        cfgScale: Float,
-        progressListener: GenerateProgressListener
+        instanceId: Long, prompt: String, imagePath: String,
+        outputPath: String, steps: Int, seed: Int,
+        useCfg: Boolean, cfgScale: Float, progressListener: GenerateProgressListener
     ): HashMap<String, Any>?
 
     companion object {

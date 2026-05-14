@@ -1,6 +1,3 @@
-// Created by ruoyi.sjd on 2025/1/14.
-// Copyright (c) 2024 Alibaba Group Holding Limited. All rights reserved.
-
 package com.alibaba.mnnllm.android.utils
 
 import android.util.Log
@@ -12,14 +9,36 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 /**
- * Utility class for splitting large files into smaller chunks and merging them back
+ * FileSplitter：文件分片工具
+ *
+ * 一句话：把大文件拆成小块，或者把小块合并回大文件。
+ * 生活类比：就像搬家时把大件家具拆开运输，到新家再组装。
+ *
+ * 为什么需要分片？
+ * - GitHub 单文件上传限制 100MB，模型文件可能 >1GB
+ * - 某些存储系统对单文件大小有限制
+ * - 分片下载支持断点续传（下载失败只需重新下载失败的那一片）
+ *
+ * 文件格式：
+ * - 原始文件：model.bin（1.5GB）
+ * - 分片后：model.bin.part1（1GB）+ model.bin.part2（0.5GB）
+ * - 元数据：splits_info.json（记录分片信息）
  */
 object FileSplitter {
     private const val TAG = "FileSplitter"
+
+    // MAX_CHUNK_SIZE：每个分片的最大大小（1GB）
+    // const val 必须是编译时常量
     const val MAX_CHUNK_SIZE = 1024 * 1024 * 1024L // 1GB
-    
+
     /**
-     * Information about file splits
+     * SplitInfo：分片信息（序列化为 splits_info.json）
+     *
+     * @param originalFileName 原始文件名
+     * @param originalFileSize 原始文件大小
+     * @param chunkSize 每个分片的最大大小
+     * @param totalChunks 总分片数
+     * @param chunks 各分片的详细信息
      */
     data class SplitInfo(
         val originalFileName: String,
@@ -28,61 +47,76 @@ object FileSplitter {
         val totalChunks: Int,
         val chunks: List<ChunkInfo>
     )
-    
+
+    /**
+     * ChunkInfo：单个分片的信息
+     *
+     * @param chunkIndex 分片序号（从 1 开始）
+     * @param chunkFileName 分片文件名（如 "model.bin.part1"）
+     * @param chunkSize 分片大小（字节）
+     * @param checksum 校验和（可选）
+     */
     data class ChunkInfo(
         val chunkIndex: Int,
         val chunkFileName: String,
         val chunkSize: Long,
         val checksum: String? = null
     )
-    
+
     /**
-     * Split a large file into smaller chunks
-     * @param sourceFile The file to split
-     * @param outputDir Directory to store the chunks
-     * @param chunkSize Maximum size of each chunk (default: 1GB)
-     * @return SplitInfo containing information about the splits
+     * splitFile：把大文件拆分成多个小分片
+     *
+     * @param sourceFile 要拆分的源文件
+     * @param outputDir 分片输出目录
+     * @param chunkSize 每个分片的最大大小
+     * @return SplitInfo（分片信息），如果文件不需要拆分返回 null
      */
     fun splitFile(
-        sourceFile: File, 
-        outputDir: File, 
+        sourceFile: File,
+        outputDir: File,
         chunkSize: Long = MAX_CHUNK_SIZE
     ): SplitInfo? {
         if (!sourceFile.exists()) {
             Log.e(TAG, "Source file does not exist: ${sourceFile.absolutePath}")
             return null
         }
-        
+
         if (!outputDir.exists()) {
             outputDir.mkdirs()
         }
-        
+
         val fileSize = sourceFile.length()
+        // 如果文件已经够小，不需要拆分
         if (fileSize <= chunkSize) {
             Log.d(TAG, "File ${sourceFile.name} is already small enough (${fileSize} bytes), no splitting needed")
             return null
         }
-        
+
+        // 计算需要多少个分片
+        // (fileSize + chunkSize - 1) / chunkSize 是向上取整的除法
         val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt()
         val chunks = mutableListOf<ChunkInfo>()
-        
+
         Log.d(TAG, "Splitting file ${sourceFile.name} (${fileSize} bytes) into $totalChunks chunks")
-        
+
         try {
+            // FileInputStream.use {}：自动关闭文件流（类似 try-with-resources）
             FileInputStream(sourceFile).use { inputStream ->
                 val buffer = ByteArray(chunkSize.toInt())
-                
+
                 for (chunkIndex in 0 until totalChunks) {
                     val chunkFileName = "${sourceFile.name}.part${chunkIndex + 1}"
                     val chunkFile = File(outputDir, chunkFileName)
-                    
+
+                    // 读取一个分片大小的数据
                     val bytesRead = inputStream.read(buffer)
                     if (bytesRead == -1) break
-                    
+
+                    // 写入分片文件
                     FileOutputStream(chunkFile).use { outputStream ->
                         outputStream.write(buffer, 0, bytesRead)
                     }
-                    
+
                     val actualChunkSize = bytesRead.toLong()
                     val chunkInfo = ChunkInfo(
                         chunkIndex = chunkIndex + 1,
@@ -90,11 +124,11 @@ object FileSplitter {
                         chunkSize = actualChunkSize
                     )
                     chunks.add(chunkInfo)
-                    
+
                     Log.d(TAG, "Created chunk $chunkFileName (${actualChunkSize} bytes)")
                 }
             }
-            
+
             val splitInfo = SplitInfo(
                 originalFileName = sourceFile.name,
                 originalFileSize = fileSize,
@@ -102,295 +136,228 @@ object FileSplitter {
                 totalChunks = totalChunks,
                 chunks = chunks
             )
-            
-            // Save split info to JSON file
+
+            // 保存分片信息到 JSON 文件
             val splitInfoFile = File(outputDir, "splits_info.json")
             val gson = Gson()
             val json = gson.toJson(splitInfo)
             splitInfoFile.writeText(json)
-            
+
             Log.d(TAG, "Split info saved to ${splitInfoFile.absolutePath}")
             return splitInfo
-            
+
         } catch (e: IOException) {
             Log.e(TAG, "Failed to split file ${sourceFile.name}", e)
             return null
         }
     }
-    
+
     /**
-     * Merge split files back into the original file
-     * @param splitInfo Information about the splits
-     * @param chunksDir Directory containing the chunk files
-     * @param outputFile The output file to merge into
-     * @return true if merge was successful
+     * mergeFiles：把分片合并回原始文件
+     *
+     * @param splitInfo 分片信息
+     * @param chunksDir 分片文件所在目录
+     * @param outputFile 合并后的输出文件
+     * @return true = 合并成功
      */
     fun mergeFiles(splitInfo: SplitInfo, chunksDir: File, outputFile: File): Boolean {
         if (!chunksDir.exists()) {
             Log.e(TAG, "Chunks directory does not exist: ${chunksDir.absolutePath}")
             return false
         }
-        
+
         Log.d(TAG, "Merging ${splitInfo.totalChunks} chunks into ${outputFile.name}")
-        Log.d(TAG, "Expected final size: ${splitInfo.originalFileSize} bytes")
-        Log.d(TAG, "Output file path: ${outputFile.absolutePath}")
-        
-        // Pre-validate all chunk files before starting merge
+
+        // 按序号排序分片
+        // sortedBy {}：按 lambda 返回的值升序排序
         val sortedChunks = splitInfo.chunks.sortedBy { it.chunkIndex }
-        Log.d(TAG, "Sorted chunks: ${sortedChunks.map { "${it.chunkFileName}(${it.chunkSize})" }.joinToString(", ")}")
+
+        // 预验证所有分片文件
         var totalExpectedSize = 0L
-        
         for (chunkInfo in sortedChunks) {
             val chunkFile = File(chunksDir, chunkInfo.chunkFileName)
             if (!chunkFile.exists()) {
                 Log.e(TAG, "Chunk file does not exist: ${chunkFile.absolutePath}")
                 return false
             }
-            
             val actualSize = chunkFile.length()
             if (actualSize != chunkInfo.chunkSize) {
                 Log.e(TAG, "Chunk file ${chunkInfo.chunkFileName} size mismatch: expected ${chunkInfo.chunkSize}, actual $actualSize")
                 return false
             }
-            
             totalExpectedSize += chunkInfo.chunkSize
-            Log.d(TAG, "Validated chunk ${chunkInfo.chunkFileName}: ${chunkInfo.chunkSize} bytes")
         }
-        
+
         if (totalExpectedSize != splitInfo.originalFileSize) {
             Log.e(TAG, "Total chunk sizes ($totalExpectedSize) do not match expected original size (${splitInfo.originalFileSize})")
             return false
         }
-        
+
         try {
-            // Ensure output directory exists
             outputFile.parentFile?.mkdirs()
-            
-            // Delete output file if it exists to ensure clean merge
             if (outputFile.exists()) {
                 outputFile.delete()
             }
-            
+
             var totalBytesWritten = 0L
-            
+
             FileOutputStream(outputFile).use { outputStream ->
                 for (chunkInfo in sortedChunks) {
                     val chunkFile = File(chunksDir, chunkInfo.chunkFileName)
                     Log.d(TAG, "Merging chunk ${chunkInfo.chunkFileName} (${chunkInfo.chunkSize} bytes)")
-                    
+
                     FileInputStream(chunkFile).use { inputStream ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         var chunkBytesWritten = 0L
-                        
+
                         while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             chunkBytesWritten += bytesRead
                             totalBytesWritten += bytesRead
                         }
-                        
+
                         if (chunkBytesWritten != chunkInfo.chunkSize) {
                             Log.e(TAG, "Chunk ${chunkInfo.chunkFileName} bytes written ($chunkBytesWritten) != expected (${chunkInfo.chunkSize})")
                             return false
                         }
                     }
-                    
-                    Log.d(TAG, "Successfully merged chunk ${chunkInfo.chunkFileName}")
                 }
             }
-            
-            // Verify final file size
+
+            // 验证合并后的文件大小
             val mergedFileSize = outputFile.length()
             if (mergedFileSize != splitInfo.originalFileSize) {
                 Log.e(TAG, "CRITICAL: Merged file size ($mergedFileSize) does not match original size (${splitInfo.originalFileSize})")
-                Log.e(TAG, "Total bytes written: $totalBytesWritten")
-                
-                // Delete the corrupted file
                 outputFile.delete()
                 return false
             }
-            
+
             Log.d(TAG, "Successfully merged file ${outputFile.name} (${mergedFileSize} bytes)")
             return true
-            
+
         } catch (e: IOException) {
             Log.e(TAG, "Failed to merge files", e)
-            // Clean up partial file
             if (outputFile.exists()) {
                 outputFile.delete()
             }
             return false
         }
     }
-    
+
     /**
-     * Load split information from JSON file
-     * @param splitInfoFile The JSON file containing split information
-     * @return SplitInfo or null if loading failed
+     * loadSplitInfo：从 JSON 文件加载分片信息
      */
     fun loadSplitInfo(splitInfoFile: File): SplitInfo? {
         if (!splitInfoFile.exists()) {
-            Log.d(TAG, "Split info file does not exist: ${splitInfoFile.absolutePath}")
             return null
         }
-        
-        try {
+        return try {
             val json = splitInfoFile.readText()
-            val gson = Gson()
-            return gson.fromJson(json, SplitInfo::class.java)
+            Gson().fromJson(json, SplitInfo::class.java)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load split info from ${splitInfoFile.absolutePath}", e)
-            return null
+            null
         }
     }
-    
+
     /**
-     * Check if a file needs to be merged (has split info)
-     * @param modelDir Directory containing the model files
-     * @return true if the directory contains split files that need merging
+     * needsMerging：检查目录中是否有需要合并的分片文件
      */
     fun needsMerging(modelDir: File): Boolean {
         val splitInfoFile = File(modelDir, "splits_info.json")
         return splitInfoFile.exists()
     }
-    
+
     /**
-     * Merge all split files in a model directory
-     * @param modelDir Directory containing the model files
-     * @return true if all files were successfully merged
+     * mergeAllSplitFiles：合并目录中所有需要合并的分片文件
+     *
+     * @return true = 全部合并成功
      */
     fun mergeAllSplitFiles(modelDir: File): Boolean {
         val splitInfoFile = File(modelDir, "splits_info.json")
-        val splitInfo = loadSplitInfo(splitInfoFile) ?: return true // No split info, nothing to merge
-        
+        val splitInfo = loadSplitInfo(splitInfoFile) ?: return true
+
         Log.d(TAG, "Merging split files in ${modelDir.absolutePath}")
-        Log.d(TAG, "Split info: ${splitInfo.totalChunks} chunks, original size: ${splitInfo.originalFileSize} bytes")
-        
-        // Find all files that need merging
+
+        // 找出所有需要合并的原始文件名
         val filesToMerge = mutableListOf<String>()
         for (chunkInfo in splitInfo.chunks) {
-            // Extract original filename by removing .partX suffix
+            // 去掉 .partX 后缀得到原始文件名
             val originalFileName = chunkInfo.chunkFileName.replace(Regex("\\.part\\d+$"), "")
-            Log.d(TAG, "Chunk: ${chunkInfo.chunkFileName} -> Original: $originalFileName")
             if (!filesToMerge.contains(originalFileName)) {
                 filesToMerge.add(originalFileName)
             }
         }
-        
-        Log.d(TAG, "Files to merge: ${filesToMerge.joinToString(", ")}")
-        
+
         var allMerged = true
         val mergedFiles = mutableListOf<String>()
         val failedFiles = mutableListOf<String>()
-        
+
         for (originalFileName in filesToMerge) {
             val outputFile = File(modelDir, originalFileName)
             if (outputFile.exists()) {
-                Log.d(TAG, "File $originalFileName already exists, verifying size...")
                 val existingSize = outputFile.length()
                 if (existingSize == splitInfo.originalFileSize) {
-                    Log.d(TAG, "Existing file $originalFileName has correct size ($existingSize bytes), skipping merge")
+                    Log.d(TAG, "Existing file $originalFileName has correct size, skipping merge")
                     mergedFiles.add(originalFileName)
                     continue
                 } else {
-                    Log.w(TAG, "Existing file $originalFileName has wrong size ($existingSize bytes), expected ${splitInfo.originalFileSize}, will re-merge")
                     outputFile.delete()
                 }
             }
-            
-            Log.d(TAG, "Starting merge for file: $originalFileName")
+
             val merged = mergeFiles(splitInfo, modelDir, outputFile)
-            
             if (!merged) {
-                Log.e(TAG, "CRITICAL: Failed to merge file $originalFileName")
                 failedFiles.add(originalFileName)
                 allMerged = false
             } else {
-                // Verify the merged file size
-                val mergedSize = outputFile.length()
-                if (mergedSize != splitInfo.originalFileSize) {
-                    Log.e(TAG, "CRITICAL: Merged file $originalFileName has wrong size ($mergedSize bytes), expected ${splitInfo.originalFileSize}")
-                    outputFile.delete()
-                    failedFiles.add(originalFileName)
-                    allMerged = false
-                } else {
-                    Log.d(TAG, "Successfully merged file $originalFileName (${mergedSize} bytes)")
-                    mergedFiles.add(originalFileName)
-                    
-                    // Successfully merged, now delete the part files
-                    deletePartFiles(modelDir, originalFileName, splitInfo)
-                }
+                mergedFiles.add(originalFileName)
+                // 合并成功后删除分片文件
+                deletePartFiles(modelDir, originalFileName, splitInfo)
             }
         }
-        
-        // If all files were successfully merged, delete the split info file
+
+        // 全部合并成功后删除 splits_info.json
         if (allMerged && mergedFiles.isNotEmpty()) {
             try {
                 splitInfoFile.delete()
-                Log.d(TAG, "Deleted split info file: ${splitInfoFile.absolutePath}")
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to delete split info file: ${splitInfoFile.absolutePath}", e)
+                Log.w(TAG, "Failed to delete split info file", e)
             }
         }
-        
-        if (failedFiles.isNotEmpty()) {
-            Log.e(TAG, "Failed to merge files: ${failedFiles.joinToString(", ")}")
-            Log.e(TAG, "Successfully merged files: ${mergedFiles.joinToString(", ")}")
-        }
-        
+
         return allMerged
     }
-    
+
     /**
-     * Delete part files after successful merge
-     * @param modelDir Directory containing the model files
-     * @param originalFileName The original file name (without .part extension)
-     * @param splitInfo Information about the splits
+     * deletePartFiles：删除分片文件
+     *
+     * 在合并文件成功且大小正确后，删除原始分片文件释放空间
      */
     private fun deletePartFiles(modelDir: File, originalFileName: String, splitInfo: SplitInfo) {
         try {
-            // Double-check that the merged file exists and has correct size before deleting parts
             val mergedFile = File(modelDir, originalFileName)
             if (!mergedFile.exists()) {
                 Log.e(TAG, "CRITICAL: Merged file $originalFileName does not exist, cannot delete part files")
                 return
             }
-            
             val mergedSize = mergedFile.length()
             if (mergedSize != splitInfo.originalFileSize) {
-                Log.e(TAG, "CRITICAL: Merged file $originalFileName has wrong size ($mergedSize bytes), expected ${splitInfo.originalFileSize}, cannot delete part files")
+                Log.e(TAG, "CRITICAL: Merged file has wrong size, cannot delete part files")
                 return
             }
-            
-            Log.d(TAG, "Verified merged file $originalFileName has correct size ($mergedSize bytes), proceeding to delete part files")
-            
-            // Find all part files for this original file
-            val partFiles = splitInfo.chunks.filter { 
+
+            val partFiles = splitInfo.chunks.filter {
                 it.chunkFileName.startsWith(originalFileName) && it.chunkFileName.matches(Regex(".*\\.part\\d+$"))
             }
-            
-            var allPartsDeleted = true
+
             for (chunkInfo in partFiles) {
                 val partFile = File(modelDir, chunkInfo.chunkFileName)
                 if (partFile.exists()) {
-                    val deleted = partFile.delete()
-                    if (deleted) {
-                        Log.d(TAG, "Deleted part file: ${chunkInfo.chunkFileName}")
-                    } else {
-                        Log.w(TAG, "Failed to delete part file: ${chunkInfo.chunkFileName}")
-                        allPartsDeleted = false
-                    }
-                } else {
-                    Log.d(TAG, "Part file already deleted: ${chunkInfo.chunkFileName}")
+                    partFile.delete()
                 }
             }
-            
-            if (allPartsDeleted) {
-                Log.d(TAG, "All part files for $originalFileName have been successfully deleted")
-            } else {
-                Log.w(TAG, "Some part files for $originalFileName could not be deleted")
-            }
-            
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting part files for $originalFileName", e)
         }
