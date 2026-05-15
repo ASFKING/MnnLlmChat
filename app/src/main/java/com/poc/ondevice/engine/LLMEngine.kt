@@ -89,6 +89,26 @@ class LLMEngine {
         try {
             Log.d("LLMEngine", "开始加载模型，路径: $modelDir")
 
+            // ===== 关键修复：configPath 必须指向 config.json 文件 =====
+            // 原始 LlmService 传的是 "$modelDir/config.json"
+            // 而不是目录路径 "$modelDir"
+            // LlmSession 的 initNative() 期望接收 config.json 的完整路径
+            // 如果传目录路径，JNI 层会卡住或崩溃
+            val configPath = "$modelDir/config.json"
+            Log.d("LLMEngine", "配置文件路径: $configPath")
+
+            // 检查 config.json 是否存在
+            val configFile = java.io.File(configPath)
+            if (!configFile.exists()) {
+                Log.e("LLMEngine", "config.json 不存在！模型可能未完整下载")
+                Log.e("LLMEngine", "模型目录内容:")
+                java.io.File(modelDir).listFiles()?.forEach {
+                    Log.e("LLMEngine", "  - ${it.name} (${it.length()} bytes)")
+                }
+                return@withContext false
+            }
+            Log.d("LLMEngine", "config.json 存在，大小: ${configFile.length()} bytes")
+
             // ChatService.provide()：获取 ChatService 单例
             // ChatService 是 MNN 项目中已有的会话工厂，负责创建推理会话
             val service = ChatService.provide()
@@ -97,7 +117,7 @@ class LLMEngine {
             // createLlmSession：创建一个 LLM 推理会话
             // 参数说明：
             // - modelId：模型标识符（用于日志和调试）
-            // - modelDir：模型目录路径（包含 config.json、模型权重等）
+            // - configPath：config.json 的完整路径（不是目录！）
             // - sessionId：会话标识符（一个模型可以有多个会话，各有独立的 KV Cache）
             // - chatDataItemList：对话历史（null = 空白对话）
             // - supportOmni：是否支持多模态（false = 纯文本 LLM）
@@ -105,7 +125,7 @@ class LLMEngine {
             // - useCustomConfig：是否使用自定义配置（true = 读取 custom_config.json）
             chatSession = service.createLlmSession(
                 modelId = "poc_llm",
-                modelDir = modelDir,
+                modelDir = configPath,  // ← 修复：传 config.json 路径，不是目录
                 sessionIdParam = "poc_session",
                 chatDataItemList = null,
                 supportOmni = false,
