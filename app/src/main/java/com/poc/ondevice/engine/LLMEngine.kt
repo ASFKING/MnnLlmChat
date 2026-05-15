@@ -1,5 +1,6 @@
 package com.poc.ondevice.engine
 
+import android.util.Log
 import com.alibaba.mnnllm.android.llm.ChatService
 import com.alibaba.mnnllm.android.llm.GenerateProgressListener
 import kotlinx.coroutines.Dispatchers
@@ -86,9 +87,12 @@ class LLMEngine {
      */
     suspend fun load(modelDir: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            Log.d("LLMEngine", "开始加载模型，路径: $modelDir")
+
             // ChatService.provide()：获取 ChatService 单例
             // ChatService 是 MNN 项目中已有的会话工厂，负责创建推理会话
             val service = ChatService.provide()
+            Log.d("LLMEngine", "ChatService 获取成功")
 
             // createLlmSession：创建一个 LLM 推理会话
             // 参数说明：
@@ -108,18 +112,21 @@ class LLMEngine {
                 backendType = null,
                 useCustomConfig = true
             )
+            Log.d("LLMEngine", "LlmSession 创建成功")
 
             // load()：实际加载模型权重到内存
             // 这一步会读取 .mnn 和 .mnn.weight 文件，耗时较长（几秒到十几秒）
             // 注意：load() 不返回值，如果失败会抛异常
+            Log.d("LLMEngine", "开始调用 session.load()...")
             chatSession?.load()
+            Log.d("LLMEngine", "session.load() 完成")
 
             // 如果执行到这里没有异常，说明加载成功
             true
         } catch (e: Exception) {
             // 捕获异常，防止 App 崩溃
             // 打印日志便于调试
-            e.printStackTrace()
+            Log.e("LLMEngine", "模型加载失败", e)
             chatSession?.release()
             chatSession = null
             false

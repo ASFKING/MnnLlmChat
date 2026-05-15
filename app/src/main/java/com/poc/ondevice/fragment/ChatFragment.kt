@@ -1,6 +1,7 @@
 package com.poc.ondevice.fragment
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +15,7 @@ import com.poc.ondevice.R
 import com.poc.ondevice.databinding.FragmentChatBinding
 import com.poc.ondevice.engine.LLMEngine
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * ChatFragment：文本对话页
@@ -127,26 +129,46 @@ class ChatFragment : Fragment() {
         binding.tvStatus.visibility = View.VISIBLE
         binding.btnSend.isEnabled = false
 
+        // 模型目录路径
+        val modelDir = "/data/data/com.poc.ondevice/files/models/qwen3-1.7b"
+
+        // ===== 调试信息：检查模型目录是否存在 =====
+        val dir = File(modelDir)
+        Log.d("ChatFragment", "模型目录: $modelDir")
+        Log.d("ChatFragment", "目录是否存在: ${dir.exists()}")
+        if (dir.exists()) {
+            val files = dir.listFiles()
+            Log.d("ChatFragment", "目录内文件数: ${files?.size ?: 0}")
+            files?.forEach { file ->
+                Log.d("ChatFragment", "  - ${file.name} (${file.length() / 1024 / 1024}MB)")
+            }
+        }
+
         // lifecycleScope.launch：在生命周期感知的协程中执行
         // 当 Fragment 销毁时，协程自动取消，防止内存泄漏
         lifecycleScope.launch {
-            // 模型目录路径
-            // 注意：你需要根据实际模型路径修改这里
-            val modelDir = "/data/data/com.poc.ondevice/files/models/qwen3-1.7b"
+            try {
+                // 调用引擎加载模型
+                Log.d("ChatFragment", "开始加载模型...")
+                val success = llmEngine.load(modelDir)
+                Log.d("ChatFragment", "模型加载结果: $success")
 
-            // 调用引擎加载模型
-            val success = llmEngine.load(modelDir)
-
-            // 更新 UI（lifecycleScope 默认在主线程，可以安全更新 UI）
-            if (success) {
-                binding.tvStatus.text = "模型已就绪"
-                binding.tvStatus.visibility = View.GONE
-                binding.btnSend.isEnabled = true
-                Toast.makeText(requireContext(), "模型加载成功！", Toast.LENGTH_SHORT).show()
-            } else {
-                binding.tvStatus.text = "模型加载失败，请检查模型路径"
+                // 更新 UI（lifecycleScope 默认在主线程，可以安全更新 UI）
+                if (success) {
+                    binding.tvStatus.text = "模型已就绪"
+                    binding.tvStatus.visibility = View.GONE
+                    binding.btnSend.isEnabled = true
+                    Toast.makeText(requireContext(), "模型加载成功！", Toast.LENGTH_SHORT).show()
+                } else {
+                    binding.tvStatus.text = "模型加载失败，请检查 Logcat 日志"
+                    binding.btnSend.isEnabled = false
+                    Toast.makeText(requireContext(), "模型加载失败", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ChatFragment", "模型加载异常", e)
+                binding.tvStatus.text = "加载异常: ${e.message}"
                 binding.btnSend.isEnabled = false
-                Toast.makeText(requireContext(), "模型加载失败", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "加载异常: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
