@@ -87,6 +87,10 @@ class ModelDownloader(private val context: Context) {
     /**
      * 下载模型（挂起函数）
      *
+     * 支持两种下载模式：
+     * 1. ModelScope 模式：model.directFiles 为 null → 通过 ModelScope API 下载整个仓库
+     * 2. 直接 URL 模式：model.directFiles 非空 → 逐个从指定 URL 下载文件
+     *
      * suspend fun：Kotlin 协程的挂起函数
      * - 可以在执行过程中"暂停"（比如等网络响应），不阻塞主线程
      * - 必须在协程作用域内调用（比如 lifecycleScope.launch {}）
@@ -122,56 +126,14 @@ class ModelDownloader(private val context: Context) {
                     return@withContext
                 }
 
-                // Step 1: 获取仓库文件列表
-                Log.d(TAG, "Fetching file list for: ${model.modelId}")
-                val files = fetchRepoFiles(model.modelId)
-                if (files.isEmpty()) {
-                    onError("获取文件列表失败：返回为空")
-                    return@withContext
+                // 根据 directFiles 是否存在，选择下载方式
+                if (model.directFiles.isNullOrEmpty()) {
+                    // 模式 1：ModelScope 仓库下载（原有逻辑）
+                    downloadFromModelScope(model, modelDir, onProgress, onComplete, onError)
+                } else {
+                    // 模式 2：直接 URL 下载（新增逻辑）
+                    downloadDirectFiles(model, modelDir, onProgress, onComplete, onError)
                 }
-
-                // sumOf {}：对列表中每个元素执行 lambda，把结果加起来
-                // 这里是计算所有文件的总大小
-                val totalSize = files.sumOf { it.size }
-                var downloadedSize = 0L
-
-                // 创建模型目录（包括所有父目录）
-                modelDir.mkdirs()
-
-                // Step 2: 逐个下载文件
-                for (fileInfo in files) {
-                    // 目标文件路径：模型目录 + 文件在仓库中的相对路径
-                    val targetFile = File(modelDir, fileInfo.path)
-                    // parentFile：获取父目录
-                    // ?.mkdirs()：安全调用，如果父目录不为 null 就创建
-                    targetFile.parentFile?.mkdirs()
-
-                    // 如果文件已存在且大小匹配，跳过（支持断点续传的基础）
-                    if (targetFile.exists() && targetFile.length() == fileInfo.size) {
-                        downloadedSize += fileInfo.size
-                        continue  // continue：跳过本次循环，进入下一次
-                    }
-
-                    // 下载单个文件
-                    downloadFile(
-                        modelId = model.modelId,
-                        filePath = fileInfo.path,
-                        targetFile = targetFile,
-                        onFileProgress = { fileDownloaded ->
-                            // 更新总进度：已下载的文件大小 + 当前文件已下载的大小
-                            onProgress(
-                                downloadedSize + fileDownloaded,
-                                totalSize,
-                                fileInfo.path
-                            )
-                        }
-                    )
-
-                    downloadedSize += fileInfo.size
-                }
-
-                Log.d(TAG, "Model download complete: ${model.modelDirName}")
-                onComplete(modelDir)
 
             } catch (e: Exception) {
                 // 捕获所有异常，通知调用方
@@ -179,6 +141,197 @@ class ModelDownloader(private val context: Context) {
                 onError("下载失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 直接 URL 下载模式
+     *
+     * 从 directFiles 列表中逐个下载文件
+     * 适用场景：模型不在 ModelScope 上（如 HuggingFace 独有的 ONNX 模型）
+     *
+     * 工作流程：
+     * 1. 计算所有文件的总大小（用于进度显示）
+     * 2. 遍历 directFiles 列表
+     * 3. 对每个文件，调用 downloadSingleFile 从 URL 下载到本地
+     * 4. 所有文件下载完成后，回调 onComplete
+     */
+    private suspend fun downloadDirectFiles(
+        model: ModelEntry,
+        modelDir: File,
+        onProgress: (downloaded: Long, total: Long, currentFile: String) -> Unit,
+        onComplete: (modelPath: File) -> Unit,
+        onError: (error: String) -> Unit
+    ) {
+        // files 一定非空（调用方已检查 isNullOrEmpty），这里用 !! 断言
+        val files = model.directFiles!!
+
+        // 计算总大小：如果 fileSize 为 0（未知），就不纳入总大小计算
+        val totalSize = files.sumOf { it.fileSize }
+        var downloadedSize = 0L
+
+        // 创建模型目录
+        modelDir.mkdirs()
+
+        // 逐个下载文件
+        for (file in files) {
+            val targetFile = File(modelDir, file.fileName)
+
+            // 如果文件已存在且大小匹配，跳过
+            if (targetFile.exists() && file.fileSize > 0 && targetFile.length() == file.fileSize) {
+                downloadedSize += file.fileSize
+                Log.d(TAG, "File already exists, skipping: ${file.fileName}")
+                continue
+            }
+
+            Log.d(TAG, "Downloading direct file: ${file.url}")
+            downloadSingleFile(
+                fileUrl = file.url,
+                targetFile = targetFile,
+                onFileProgress = { fileDownloaded ->
+                    onProgress(
+                        downloadedSize + fileDownloaded,
+                        totalSize,
+                        file.fileName
+                    )
+                }
+            )
+            downloadedSize += targetFile.length()
+        }
+
+        Log.d(TAG, "Direct download complete: ${model.modelDirName}")
+        onComplete(modelDir)
+    }
+
+    /**
+     * 从指定 URL 下载单个文件到本地
+     *
+     * 这是一个通用的文件下载方法，不依赖 ModelScope API
+     * 可以从 HuggingFace、GitHub Releases 等任何 HTTP 服务器下载
+     *
+     * @param fileUrl      文件的完整下载 URL
+     * @param targetFile   本地目标文件
+     * @param onFileProgress 文件内进度回调
+     */
+    private suspend fun downloadSingleFile(
+        fileUrl: String,
+        targetFile: File,
+        onFileProgress: (downloaded: Long) -> Unit
+    ) {
+        withContext(Dispatchers.IO) {
+            // URL(fileUrl)：把字符串 URL 转成 URL 对象
+            // openConnection()：打开 HTTP 连接
+            // as HttpURLConnection：类型转换
+            val conn = URL(fileUrl).openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 30000    // 连接超时 30 秒
+            conn.readTimeout = 120000      // 读取超时 2 分钟（大文件需要更长时间）
+            conn.setRequestProperty("User-Agent", "MnnLlmChat-PoC/1.0")
+            // HuggingFace 需要这个 header 才能正常下载
+            conn.setRequestProperty("Accept", "*/*")
+
+            try {
+                // 检查 HTTP 响应码
+                val responseCode = conn.responseCode
+                // 3xx 重定向需要手动跟随（HttpURLConnection 默认不自动跟随跨域重定向）
+                if (responseCode in 301..308) {
+                    val newUrl = conn.getHeaderField("Location")
+                    if (newUrl != null) {
+                        conn.disconnect()
+                        // 递归调用自身，跟随重定向
+                        downloadSingleFile(newUrl, targetFile, onFileProgress)
+                        return@withContext
+                    }
+                }
+                if (responseCode != 200) {
+                    throw Exception("下载失败: HTTP $responseCode for $fileUrl")
+                }
+
+                val inputStream = conn.inputStream
+                val outputStream = FileOutputStream(targetFile)
+
+                // 流式读写：每次读 8KB
+                val buffer = ByteArray(8192)
+                var downloaded = 0L
+                var bytesRead: Int
+
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    outputStream.write(buffer, 0, bytesRead)
+                    downloaded += bytesRead
+                    onFileProgress(downloaded)
+                }
+
+                outputStream.flush()
+                outputStream.close()
+                inputStream.close()
+
+                Log.d(TAG, "File downloaded: ${targetFile.name} (${downloaded} bytes)")
+
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
+    /**
+     * 从 ModelScope 仓库下载（原有逻辑，抽取为独立方法）
+     */
+    private suspend fun downloadFromModelScope(
+        model: ModelEntry,
+        modelDir: File,
+        onProgress: (downloaded: Long, total: Long, currentFile: String) -> Unit,
+        onComplete: (modelPath: File) -> Unit,
+        onError: (error: String) -> Unit
+    ) {
+        // Step 1: 获取仓库文件列表
+        Log.d(TAG, "Fetching file list for: ${model.modelId}")
+        val files = fetchRepoFiles(model.modelId)
+        if (files.isEmpty()) {
+            onError("获取文件列表失败：返回为空")
+            return
+        }
+
+        // sumOf {}：对列表中每个元素执行 lambda，把结果加起来
+        // 这里是计算所有文件的总大小
+        val totalSize = files.sumOf { it.size }
+        var downloadedSize = 0L
+
+        // 创建模型目录（包括所有父目录）
+        modelDir.mkdirs()
+
+        // Step 2: 逐个下载文件
+        for (fileInfo in files) {
+            // 目标文件路径：模型目录 + 文件在仓库中的相对路径
+            val targetFile = File(modelDir, fileInfo.path)
+            // parentFile：获取父目录
+            // ?.mkdirs()：安全调用，如果父目录不为 null 就创建
+            targetFile.parentFile?.mkdirs()
+
+            // 如果文件已存在且大小匹配，跳过（支持断点续传的基础）
+            if (targetFile.exists() && targetFile.length() == fileInfo.size) {
+                downloadedSize += fileInfo.size
+                continue  // continue：跳过本次循环，进入下一次
+            }
+
+            // 下载单个文件
+            downloadFile(
+                modelId = model.modelId,
+                filePath = fileInfo.path,
+                targetFile = targetFile,
+                onFileProgress = { fileDownloaded ->
+                    // 更新总进度：已下载的文件大小 + 当前文件已下载的大小
+                    onProgress(
+                        downloadedSize + fileDownloaded,
+                        totalSize,
+                        fileInfo.path
+                    )
+                }
+            )
+
+            downloadedSize += fileInfo.size
+        }
+
+        Log.d(TAG, "Model download complete: ${model.modelDirName}")
+        onComplete(modelDir)
     }
 
     /**
