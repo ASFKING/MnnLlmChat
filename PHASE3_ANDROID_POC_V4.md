@@ -1898,7 +1898,7 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-15 17:10 CST
+> **最后更新**：2026-05-15 17:19 CST
 > **当前阶段**：Day 3 进行中 — ONNX Runtime 依赖已配置，准备下载 bge 模型
 
 ### D.1 总览
@@ -1967,7 +1967,7 @@ Sherpa-MNN ASR/TTS 参考：
 
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
-| 3.1 | 下载 bge-small-zh-v1.5 ONNX 模型 + tokenizer.json | 🟡 | — | 提供下载地址，复用 ModelDownloader 机制 |
+| 3.1 | 下载 bge-small-zh-v1.5 ONNX 模型 + tokenizer.json | ✅ | 2026-05-15 | ModelRegistry 已注册，App 内下载按钮可用（从 HuggingFace 直接下载） |
 | 3.2 | 添加 ONNX Runtime + Extensions 依赖 | ✅ | 2026-05-15 | onnxruntime:1.19.0 + onnxruntime-extensions:0.12.4（注意：0.12.0 不存在，修正为 0.12.4） |
 | 3.3 | 实现 EmbeddingEngine | ⬜ | — | |
 | 3.4 | 验证嵌入质量（相似 vs 不相似文本） | ⬜ | — | |
@@ -2063,7 +2063,7 @@ Sherpa-MNN ASR/TTS 参考：
 |------|------|----------|----------|------|
 | Qwen3-1.7B (Q4_K_M) | ~1.1GB | ⬜ | ⬜ | LLM 推理主力（备选） |
 | Qwen3-0.6B | ~0.6GB | ✅ | ✅ | 已下载，PoC 验证用 |
-| bge-small-zh-v1.5 | ~100MB | ⬜ | ⬜ | 文本嵌入 |
+| bge-small-zh-v1.5 | ~100MB | 🟡 | ⬜ | App 内下载按钮已配置（HuggingFace 源） |
 | Qwen2.5-VL-3B | ~2.5GB | ⬜ | ⬜ | 多模态（可选） |
 | SenseVoice | ~200MB | ⬜ | ⬜ | ASR |
 | MeloTTS-zh | ~150MB | ⬜ | ⬜ | TTS |
