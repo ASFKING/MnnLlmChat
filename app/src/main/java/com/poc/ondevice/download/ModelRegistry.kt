@@ -52,32 +52,16 @@ object ModelRegistry {
             modelDirName = "Qwen3-4B-MNN"
         ),
 
-        // ===== 文本嵌入模型（HuggingFace 来源，直接 URL 下载）=====
-        // bge-small-zh-v1.5：智源研究院的中文文本嵌入模型
-        // 输出 512 维向量，用于 RAG 的文档检索
-        // ModelScope 上只有 PyTorch/safetensors 格式，ONNX 格式只在 HuggingFace 上有
-        // 所以用 directFiles 模式从 HuggingFace 直接下载
+        // ===== 文本嵌入模型（ModelScope 来源，复用 LLM 框架）=====
+        // bge-large-zh-mnn：阿里巴巴 MNN 团队用 llmexport.py 导出的 BERT 嵌入模型
+        // 4-bit 量化，复用 libmnnllmapp.so 加载，不需要额外 JNI 或 ONNX Runtime
+        // llm_config.json 中 prompt_template: "[CLS]%s[SEP]"，key_value_shape: []（无 KV Cache）
         ModelEntry(
-            modelId = "BAAI/bge-small-zh-v1.5",      // 仅用于标识，实际不走 ModelScope API
-            displayName = "bge-small-zh (嵌入模型)",
-            description = "中文文本嵌入模型，512 维输出，用于 RAG 文档检索",
-            sizeGB = 0.1,                             // ~93MB ONNX + ~439KB tokenizer ≈ 0.1GB
-            modelDirName = "bge-small-zh-v1.5",
-            directFiles = listOf(
-                DirectFile(
-                    // HuggingFace 上 bge-small-zh-v1.5 的 ONNX 模型文件
-                    // 格式：https://huggingface.co/{repo}/resolve/main/{path}
-                    url = "https://huggingface.co/BAAI/bge-small-zh-v1.5/resolve/main/onnx/model.onnx",
-                    fileName = "model.onnx",          // 本地保存文件名
-                    fileSize = 93674400                // ~93MB（字节）
-                ),
-                DirectFile(
-                    // HuggingFace 上 bge-small-zh-v1.5 的分词器配置
-                    url = "https://huggingface.co/BAAI/bge-small-zh-v1.5/resolve/main/tokenizer.json",
-                    fileName = "tokenizer.json",       // 本地保存文件名
-                    fileSize = 439125                  // ~439KB（字节）
-                )
-            )
+            modelId = "MNN/bge-large-zh-mnn",     // ModelScope 仓库路径
+            displayName = "bge-large-zh (嵌入模型)",
+            description = "中文文本嵌入模型，1024 维输出，4-bit 量化，用于 RAG 文档检索",
+            sizeGB = 0.22,                          // ~173MB embedding.mnn + ~43MB embeddings_bf16.bin ≈ 216MB
+            modelDirName = "bge-large-zh-mnn"
         )
     )
 }
