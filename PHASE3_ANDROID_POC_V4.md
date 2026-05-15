@@ -1774,14 +1774,14 @@ Day 9  联调 + 性能测试 + PoC 总结
 ```
 Day 0 ✅ 所有工具安装完毕 ✅ MNN 源码克隆 ✅ 手机 adb 连接 ✅ Kotlin 基础语法
 Day 1 ✅ MnnLlmChat 跑通 ✅ 裁剪后项目编译通过 ✅ 预编译 .so 加载成功
-Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用 ✅ MemoryMonitor 可用 ✅ PerformanceTracker 可用
-Day 3 ✅ bge 模型加载 ✅ encode() 返回正确向量 ✅ 相似度验证通过
-Day 4 ✅ VectorStore 可用 ✅ RAG 端到端通过 ✅ RAGFragment 可交互
-Day 5 ✅ 结构化提取可用 ✅ JSON 正确率 > 90% ✅ 文档生成可用
-Day 6 ✅ 多模态推理可用 ✅ 图片理解效果合理
-Day 7 ✅ ASR 模型加载 ✅ 语音识别准确率 > 90% ✅ AudioRecorder 可用
-Day 8 ✅ TTS 模型加载 ✅ 语音合成可用 ✅ 全链路语音对话跑通
-Day 9 ✅ 六场景联调通过 ✅ 性能报告完成 ✅ 离线测试通过 ✅ PoC 总结
+Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用 ✅ MemoryMonitor 可用 ✅ PerformanceTracker 可用 ✅ LLM 推理接入 ✅ 对话功能可用
+Day 3 ⬜ bge 模型加载 ⬜ encode() 返回正确向量 ⬜ 相似度验证通过
+Day 4 ⬜ VectorStore 可用 ⬜ RAG 端到端通过 ⬜ RAGFragment 可交互
+Day 5 ⬜ 结构化提取可用 ⬜ JSON 正确率 > 90% ⬜ 文档生成可用
+Day 6 ⬜ 多模态推理可用 ⬜ 图片理解效果合理
+Day 7 ⬜ ASR 模型加载 ⬜ 语音识别准确率 > 90% ⬜ AudioRecorder 可用
+Day 8 ⬜ TTS 模型加载 ⬜ 语音合成可用 ⬜ 全链路语音对话跑通
+Day 9 ⬜ 六场景联调通过 ⬜ 性能报告完成 ⬜ 离线测试通过 ⬜ PoC 总结
 ```
 
 ---
@@ -1898,8 +1898,8 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-15
-> **当前阶段**：Day 2 已完成，准备进入 Day 3（嵌入模型集成）
+> **最后更新**：2026-05-15 16:51 CST
+> **当前阶段**：Day 2 全部完成（含 LLM 推理接入），准备进入 Day 3（嵌入模型集成）
 
 ### D.1 总览
 
@@ -1960,6 +1960,8 @@ Sherpa-MNN ASR/TTS 参考：
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | ✅ | 2026-05-13 | 含 ChatMessageAdapter + RecyclerView |
 | 2.8 | 实现 MemoryMonitor 工具类 | ✅ | 2026-05-15 | MemoryMonitor.kt：JVM + Native + PSS 内存监控，含预警判断 |
 | 2.9 | 实现 PerformanceTracker 工具类 | ✅ | 2026-05-15 | PerformanceTracker.kt：计时 + tok/s 统计 + 性能报告 |
+| 2.10 | 实现 LLMEngine（MNN-LLM 推理封装） | ✅ | 2026-05-15 | LLMEngine.kt：封装 MNN-LLM，提供 Flow 流式接口 + Mutex 线程安全 |
+| 2.11 | ChatFragment 接入真实 LLM 推理 | ✅ | 2026-05-15 | 替换占位回复，接入 LLMEngine.generateStream()，对话功能可用 |
 
 ### D.5 Day 3：嵌入模型集成
 
@@ -2075,6 +2077,8 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-13 | ChatDataItem.kt 引用已删除的 chatlist 包 | 删除 import，内联 USER/ASSISTANT 常量 | 5min |
 | 2026-05-13 | 裁剪后 mls.api/modelist/qnn/benchmark 包缺失 | 创建 9 个桩类 + App.kt + Timber 依赖 | 15min |
 | 2026-05-13 | ModelUtils.kt 引用 modelmarket/R.drawable 等缺失资源 | 重写为精简版，删除不需要的功能 | 10min |
+| 2026-05-15 | LLMEngine 的 configPath 传了目录而非 config.json 文件 | 修正为 `"$modelDir/config.json"`，使用 ModelDownloader.getModelPath() 获取正确路径 | 10min |
+| 2026-05-15 | MemoryMonitor 用 nativeHeapAllocatedSize 不准确 | 改用 Debug.getNativePss() 获取更准确的原生内存占用 | 5min |
 
 ### D.15 关键决策记录
 
@@ -2115,8 +2119,12 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 补全全部 37 个 Kotlin 文件的双层注释（语法注释 + 业务注释）
 - ✅ 注释覆盖：PoC 核心层、MNN 引擎层、模型配置层、工具类层、桩类层
 
-#### 2026-05-15（Day 2 最终收尾）
+#### 2026-05-15（Day 2 最终收尾 + LLM 推理接入）
 - ✅ 实现 MemoryMonitor 工具类（JVM + Native + PSS 内存监控 + 预警判断）
 - ✅ 实现 PerformanceTracker 工具类（计时 + tok/s 统计 + 性能报告）
 - ✅ 更新 HomeFragment 集成 MemoryMonitor + PerformanceTracker（每 3 秒自动刷新）
-- ✅ Day 2 全部任务完成（9/9）
+- ✅ 实现 LLMEngine.kt（封装 MNN-LLM 推理，Flow 流式接口，Mutex 线程安全）
+- ✅ ChatFragment 接入真实 LLM 推理，替换占位回复，对话功能可用
+- ✅ 修复 configPath 指向目录而非 config.json 的问题
+- ✅ 修复 MemoryMonitor 使用 nativePss 替代 nativeHeapAllocatedSize
+- ✅ Day 2 全部任务完成（11/11），LLM 对话功能跑通验证
