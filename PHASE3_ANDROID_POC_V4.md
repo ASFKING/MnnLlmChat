@@ -1775,7 +1775,7 @@ Day 9  联调 + 性能测试 + PoC 总结
 Day 0 ✅ 所有工具安装完毕 ✅ MNN 源码克隆 ✅ 手机 adb 连接 ✅ Kotlin 基础语法
 Day 1 ✅ MnnLlmChat 跑通 ✅ 裁剪后项目编译通过 ✅ 预编译 .so 加载成功
 Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用 ✅ MemoryMonitor 可用 ✅ PerformanceTracker 可用 ✅ LLM 推理接入 ✅ 对话功能可用
-Day 3 ⬜ bge 模型加载 ⬜ encode() 返回正确向量 ⬜ 相似度验证通过
+Day 3 🟡 ONNX Runtime 依赖已配置 ⬜ bge 模型下载 ⬜ EmbeddingEngine 实现 ⬜ encode() 返回正确向量 ⬜ 相似度验证通过
 Day 4 ⬜ VectorStore 可用 ⬜ RAG 端到端通过 ⬜ RAGFragment 可交互
 Day 5 ⬜ 结构化提取可用 ⬜ JSON 正确率 > 90% ⬜ 文档生成可用
 Day 6 ⬜ 多模态推理可用 ⬜ 图片理解效果合理
@@ -1898,8 +1898,8 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-15 16:51 CST
-> **当前阶段**：Day 2 全部完成（含 LLM 推理接入），准备进入 Day 3（嵌入模型集成）
+> **最后更新**：2026-05-15 17:10 CST
+> **当前阶段**：Day 3 进行中 — ONNX Runtime 依赖已配置，准备下载 bge 模型
 
 ### D.1 总览
 
@@ -1967,8 +1967,8 @@ Sherpa-MNN ASR/TTS 参考：
 
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
-| 3.1 | 下载 bge-small-zh-v1.5 ONNX 模型 + tokenizer.json | ⬜ | — | |
-| 3.2 | 添加 ONNX Runtime + Extensions 依赖 | ⬜ | — | |
+| 3.1 | 下载 bge-small-zh-v1.5 ONNX 模型 + tokenizer.json | 🟡 | — | 提供下载地址，复用 ModelDownloader 机制 |
+| 3.2 | 添加 ONNX Runtime + Extensions 依赖 | ✅ | 2026-05-15 | onnxruntime:1.19.0 + onnxruntime-extensions:0.12.4（注意：0.12.0 不存在，修正为 0.12.4） |
 | 3.3 | 实现 EmbeddingEngine | ⬜ | — | |
 | 3.4 | 验证嵌入质量（相似 vs 不相似文本） | ⬜ | — | |
 | 3.5 | 性能测试：单条编码耗时 | ⬜ | — | |
@@ -2079,6 +2079,8 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-13 | ModelUtils.kt 引用 modelmarket/R.drawable 等缺失资源 | 重写为精简版，删除不需要的功能 | 10min |
 | 2026-05-15 | LLMEngine 的 configPath 传了目录而非 config.json 文件 | 修正为 `"$modelDir/config.json"`，使用 ModelDownloader.getModelPath() 获取正确路径 | 10min |
 | 2026-05-15 | MemoryMonitor 用 nativeHeapAllocatedSize 不准确 | 改用 Debug.getNativePss() 获取更准确的原生内存占用 | 5min |
+| 2026-05-15 | onnxruntime-extensions:0.12.0 在 Maven Central 不存在 | 修正为 0.12.4（可用版本：0.11.0 / 0.12.4 / 0.13.0） | 5min |
+| 2026-05-15 | androidx.test.ext:junit:1.5 不存在 | 修正为 1.2.1 | 2min |
 
 ### D.15 关键决策记录
 
