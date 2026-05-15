@@ -52,7 +52,7 @@ class MemoryMonitor(private val context: Context) {
      * - javaHeapUsedMB：JVM 堆已用内存（Kotlin/Java 对象占用的空间）
      * - javaHeapMaxMB：JVM 堆最大可用内存（超过就 OOM）
      * - nativeHeapUsedMB：Native 堆已用内存（MNN 模型权重、JNI 分配的内存）
-     * - nativeHeapAllocatedMB：Native 堆已分配内存（OS 分配给进程的）
+     * - nativeHeapAllocatedMB：Native 内存 PSS（按共享比例分摊的物理内存）
      * - totalPssMB：总 PSS（Proportional Set Size，按比例分摊的物理内存）
      * - availableMB：系统可用内存（可供新分配的内存）
      * - isLowMemory：是否处于低内存状态
@@ -105,9 +105,10 @@ class MemoryMonitor(private val context: Context) {
         // "私有"是指只有这个进程在用的页（不与其他进程共享）
         val nativeHeapUsed = debugMemoryInfo.nativePrivateDirty.toLong() / 1024  // KB → MB
 
-        // nativeHeapAllocated：Native 堆已分配的总量
-        // 比 nativePrivateDirty 大，因为包含已分配但未使用的内存
-        val nativeHeapAllocated = debugMemoryInfo.nativeHeapAllocatedSize.toLong() / 1024
+        // nativePss：Native 内存的 PSS（按共享比例分摊的物理内存）
+        // Debug.MemoryInfo 没有 nativeHeapAllocatedSize 字段
+        // 用 nativePss 作为 Native 内存占用的合理近似
+        val nativeHeapAllocated = debugMemoryInfo.nativePss.toLong() / 1024
 
         // getTotalPss()：总 PSS（Proportional Set Size）
         // PSS = 私有内存 + 共享内存按比例分摊
