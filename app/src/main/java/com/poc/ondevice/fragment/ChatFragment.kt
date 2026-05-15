@@ -13,6 +13,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.poc.ondevice.R
 import com.poc.ondevice.databinding.FragmentChatBinding
+import com.poc.ondevice.download.ModelDownloader
+import com.poc.ondevice.download.ModelRegistry
 import com.poc.ondevice.engine.LLMEngine
 import kotlinx.coroutines.launch
 import java.io.File
@@ -73,6 +75,14 @@ class ChatFragment : Fragment() {
     private val llmEngine by lazy { LLMEngine() }
 
     /**
+     * modelDownloader：模型下载器（用于获取模型路径）
+     *
+     * 为什么用 by lazy？
+     * 需要 context 来初始化，而 context 在 onCreateView 之后才可用
+     */
+    private val modelDownloader by lazy { ModelDownloader(requireContext()) }
+
+    /**
      * isGenerating：是否正在生成中
      *
      * 为什么需要这个标志？
@@ -129,19 +139,26 @@ class ChatFragment : Fragment() {
         binding.tvStatus.visibility = View.VISIBLE
         binding.btnSend.isEnabled = false
 
-        // 模型目录路径
-        val modelDir = "/data/data/com.poc.ondevice/files/models/qwen3-1.7b"
+        // 从 ModelRegistry 获取第一个模型（Qwen3-1.7B）的目录名
+        val modelEntry = ModelRegistry.defaultModels.first()
+        // 使用 ModelDownloader 获取正确的模型路径
+        // 路径格式：/data/data/com.poc.ondevice/files/models/Qwen3-1.7B-MNN
+        val modelDir = modelDownloader.getModelPath(modelEntry.modelDirName)
 
         // ===== 调试信息：检查模型目录是否存在 =====
-        val dir = File(modelDir)
-        Log.d("ChatFragment", "模型目录: $modelDir")
-        Log.d("ChatFragment", "目录是否存在: ${dir.exists()}")
-        if (dir.exists()) {
-            val files = dir.listFiles()
+        Log.d("ChatFragment", "模型目录: ${modelDir.absolutePath}")
+        Log.d("ChatFragment", "目录是否存在: ${modelDir.exists()}")
+        if (modelDir.exists()) {
+            val files = modelDir.listFiles()
             Log.d("ChatFragment", "目录内文件数: ${files?.size ?: 0}")
             files?.forEach { file ->
                 Log.d("ChatFragment", "  - ${file.name} (${file.length() / 1024 / 1024}MB)")
             }
+        } else {
+            Log.e("ChatFragment", "模型目录不存在！请先下载模型")
+            binding.tvStatus.text = "请先在首页下载 Qwen3-1.7B 模型"
+            binding.btnSend.isEnabled = false
+            return
         }
 
         // lifecycleScope.launch：在生命周期感知的协程中执行
@@ -150,7 +167,7 @@ class ChatFragment : Fragment() {
             try {
                 // 调用引擎加载模型
                 Log.d("ChatFragment", "开始加载模型...")
-                val success = llmEngine.load(modelDir)
+                val success = llmEngine.load(modelDir.absolutePath)
                 Log.d("ChatFragment", "模型加载结果: $success")
 
                 // 更新 UI（lifecycleScope 默认在主线程，可以安全更新 UI）
