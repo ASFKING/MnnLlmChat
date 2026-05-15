@@ -5,11 +5,15 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.poc.ondevice.R
 import com.poc.ondevice.databinding.FragmentChatBinding
+import com.poc.ondevice.engine.LLMEngine
+import kotlinx.coroutines.launch
 
 /**
  * ChatFragment：文本对话页
@@ -19,7 +23,7 @@ import com.poc.ondevice.databinding.FragmentChatBinding
  * - 结构化提取（Day 5 实现）
  * - 文档生成（Day 5 实现）
  *
- * 当前状态：UI 骨架就绪，LLM 推理逻辑待后续接入
+ * 当前状态：已接入 LLMEngine，支持流式对话
  */
 
 // data class：Kotlin 数据类，自动生成 equals()、hashCode()、toString()、copy()
@@ -54,6 +58,28 @@ class ChatFragment : Fragment() {
     // 而不是在声明时（声明时 context 可能还没准备好）
     private lateinit var adapter: ChatMessageAdapter
 
+    /**
+     * llmEngine：LLM 推理引擎
+     *
+     * 为什么用 by lazy？
+     * 1. 延迟创建：只有第一次访问时才创建 LLMEngine 实例
+     * 2. 线程安全：lazy 默认是线程安全的（LazyThreadSafetyMode.SYNCHRONIZED）
+     * 3. 只初始化一次：后续访问返回同一个实例
+     *
+     * 类比：就像你家的热水器——你不会24小时开着，而是需要时才启动
+     */
+    private val llmEngine by lazy { LLMEngine() }
+
+    /**
+     * isGenerating：是否正在生成中
+     *
+     * 为什么需要这个标志？
+     * 1. 防止重复发送：用户在生成过程中又点了发送，会导致两个推理任务同时进行
+     * 2. 更新 UI 状态：生成中时禁用发送按钮，显示"停止"按钮
+     * 3. 管理协程：停止生成时需要取消正在运行的协程
+     */
+    private var isGenerating = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -72,15 +98,55 @@ class ChatFragment : Fragment() {
         // 初始化 RecyclerView
         setupRecyclerView()
 
+        // 加载模型
+        loadModel()
+
         // 发送按钮点击事件
         binding.btnSend.setOnClickListener {
-            // .text.toString()：获取 EditText 的文本内容
-            // .trim()：去除首尾空白字符
             val input = binding.etInput.text.toString().trim()
-            // isNotBlank()：检查字符串是否为空或只包含空白字符
-            // 与 isEmpty() 的区别：isEmpty 只检查长度，isBlank 还检查空白
             if (input.isNotBlank()) {
                 sendMessage(input)
+            }
+        }
+    }
+
+    /**
+     * 加载 LLM 模型
+     *
+     * 为什么在 onViewCreated 中调用？
+     * 因为 View 创建完毕后，我们就可以安全地更新 UI（显示加载状态）
+     *
+     * 模型路径说明：
+     * /data/data/com.poc.ondevice/files/models/qwen3-1.7b/
+     * 这是 Android App 的私有目录，只有本 App 可以访问
+     * 模型文件需要通过 adb push 推送到这个目录
+     */
+    private fun loadModel() {
+        // 显示加载状态
+        binding.tvStatus.text = "正在加载模型..."
+        binding.tvStatus.visibility = View.VISIBLE
+        binding.btnSend.isEnabled = false
+
+        // lifecycleScope.launch：在生命周期感知的协程中执行
+        // 当 Fragment 销毁时，协程自动取消，防止内存泄漏
+        lifecycleScope.launch {
+            // 模型目录路径
+            // 注意：你需要根据实际模型路径修改这里
+            val modelDir = "/data/data/com.poc.ondevice/files/models/qwen3-1.7b"
+
+            // 调用引擎加载模型
+            val success = llmEngine.load(modelDir)
+
+            // 更新 UI（lifecycleScope 默认在主线程，可以安全更新 UI）
+            if (success) {
+                binding.tvStatus.text = "模型已就绪"
+                binding.tvStatus.visibility = View.GONE
+                binding.btnSend.isEnabled = true
+                Toast.makeText(requireContext(), "模型加载成功！", Toast.LENGTH_SHORT).show()
+            } else {
+                binding.tvStatus.text = "模型加载失败，请检查模型路径"
+                binding.btnSend.isEnabled = false
+                Toast.makeText(requireContext(), "模型加载失败", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -103,11 +169,31 @@ class ChatFragment : Fragment() {
     }
 
     /**
-     * 发送消息
+     * 发送消息并获取 LLM 流式回答
      *
-     * 当前只是本地模拟，LLM 推理逻辑待后续接入
+     * 流程：
+     * 1. 添加用户消息到列表
+     * 2. 创建一个空的 AI 消息（占位）
+     * 3. 调用 LLMEngine.generateStream() 获取 Flow
+     * 4. collect Flow，每收到一个 token 就更新 AI 消息
+     * 5. 全部完成后，恢复 UI 状态
+     *
+     * @param text 用户输入的文本
      */
     private fun sendMessage(text: String) {
+        // 如果正在生成中，不允许发送新消息
+        // 这是一个简单的并发控制——避免多个推理任务同时进行
+        if (isGenerating) {
+            Toast.makeText(requireContext(), "请等待当前回答完成", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 检查模型是否已加载
+        if (!llmEngine.isLoaded) {
+            Toast.makeText(requireContext(), "模型尚未加载，请等待", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         // 添加用户消息
         messages.add(ChatMessage("user", text))
         // notifyItemInserted()：通知 RecyclerView 有新 item 插入
@@ -121,13 +207,63 @@ class ChatFragment : Fragment() {
         // .text 是 Editable? 类型，所以用 ?. 安全调用
         binding.etInput.text?.clear()
 
-        // TODO: 这里后续接入 LLMEngine，发送到模型并流式显示回复
-        // 目前先用模拟回复，验证 UI 流程
-        messages.add(ChatMessage("assistant", "（LLM 推理尚未接入，这是占位回复）"))
+        // 添加一个空的 AI 消息（占位）
+        // 后续流式更新时，会不断修改这个消息的内容
+        messages.add(ChatMessage("assistant", ""))
         adapter.notifyItemInserted(messages.size - 1)
-        binding.rvMessages.smoothScrollToPosition(messages.size - 1)
+
+        // 设置生成状态
+        isGenerating = true
+        binding.btnSend.isEnabled = false
+        binding.btnSend.text = "生成中..."
+
+        // 启动协程，执行流式生成
+        lifecycleScope.launch {
+            try {
+                // generateStream() 返回一个 Flow<String>
+                // collect 会逐个接收 Flow 发出的 token
+                llmEngine.generateStream(text).collect { token ->
+                    // 获取最后一条消息（AI 的回复）
+                    val lastIndex = messages.size - 1
+                    val lastMessage = messages[lastIndex]
+
+                    // 更新消息内容：把新 token 追加到现有内容后面
+                    // copy() 创建一个新的 data class 实例（因为 val 属性不能修改）
+                    messages[lastIndex] = lastMessage.copy(
+                        content = lastMessage.content + token
+                    )
+
+                    // 通知 RecyclerView 更新这个 item
+                    adapter.notifyItemChanged(lastIndex)
+
+                    // 滚动到底部，让用户看到最新的文字
+                    binding.rvMessages.smoothScrollToPosition(lastIndex)
+                }
+            } catch (e: Exception) {
+                // 如果生成过程中出错，显示错误信息
+                val lastIndex = messages.size - 1
+                messages[lastIndex] = messages[lastIndex].copy(
+                    content = "生成出错: ${e.message}"
+                )
+                adapter.notifyItemChanged(lastIndex)
+            } finally {
+                // finally 块：无论成功还是失败，都会执行
+                // 恢复 UI 状态
+                isGenerating = false
+                binding.btnSend.isEnabled = true
+                binding.btnSend.text = "发送"
+            }
+        }
     }
 
+    /**
+     * onDestroyView：View 销毁时调用
+     *
+     * 为什么要把 _binding 设为 null？
+     * Fragment 的生命周期比 View 长——Fragment 可能还在，但 View 已经销毁了
+     * 如果不设为 null，binding 会持有已销毁的 View 引用，导致内存泄漏
+     * 类比：搬走后要把旧钥匙扔掉，否则旧房子没法被回收
+     */
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

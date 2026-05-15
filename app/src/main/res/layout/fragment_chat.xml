@@ -6,6 +6,17 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- 模型加载状态提示 -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="正在加载模型..."
+        android:textColor="@android:color/holo_orange_dark"
+        android:padding="12dp"
+        android:gravity="center"
+        android:visibility="visible" />
+
     <!-- 消息列表区域 -->
     <!-- RecyclerView：Android 的高性能列表控件，类似 ListView 但更高效 -->
     <!-- 它只渲染屏幕可见的 item，滑出屏幕的 item 会被回收复用 -->
