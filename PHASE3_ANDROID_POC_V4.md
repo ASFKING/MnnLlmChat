@@ -1774,7 +1774,7 @@ Day 9  联调 + 性能测试 + PoC 总结
 ```
 Day 0 ✅ 所有工具安装完毕 ✅ MNN 源码克隆 ✅ 手机 adb 连接 ✅ Kotlin 基础语法
 Day 1 ✅ MnnLlmChat 跑通 ✅ 裁剪后项目编译通过 ✅ 预编译 .so 加载成功
-Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用
+Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用 ✅ MemoryMonitor 可用 ✅ PerformanceTracker 可用
 Day 3 ✅ bge 模型加载 ✅ encode() 返回正确向量 ✅ 相似度验证通过
 Day 4 ✅ VectorStore 可用 ✅ RAG 端到端通过 ✅ RAGFragment 可交互
 Day 5 ✅ 结构化提取可用 ✅ JSON 正确率 > 90% ✅ 文档生成可用
@@ -1898,8 +1898,8 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-14
-> **当前阶段**：Day 2 收尾中（MemoryMonitor + PerformanceTracker 待实现）
+> **最后更新**：2026-05-15
+> **当前阶段**：Day 2 已完成，准备进入 Day 3（嵌入模型集成）
 
 ### D.1 总览
 
@@ -1907,7 +1907,7 @@ Sherpa-MNN ASR/TTS 参考：
 |------|------|------|--------|
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
 | Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ✅ 已完成 | 100% |
-| Day 2 | ViewBinding + XML 搭 UI 骨架 | 🟡 进行中 | 80% |
+| Day 2 | ViewBinding + XML 搭 UI 骨架 | ✅ 已完成 | 100% |
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ⬜ 未开始 | 0% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
@@ -1958,8 +1958,8 @@ Sherpa-MNN ASR/TTS 参考：
 | 2.5 | 创建 5 个 Fragment 空壳 + 对应布局 | ✅ | 2026-05-13 | 5 个布局 XML + ViewBinding Fragment 已完成 |
 | 2.6 | 实现 HomeFragment（系统状态页） | ✅ | 2026-05-13 | 含内存监控、模型状态显示 |
 | 2.7 | 实现 ChatAdapter + item_chat_message.xml | ✅ | 2026-05-13 | 含 ChatMessageAdapter + RecyclerView |
-| 2.8 | 实现 MemoryMonitor 工具类 | ⬜ | — | |
-| 2.9 | 实现 PerformanceTracker 工具类 | ⬜ | — | |
+| 2.8 | 实现 MemoryMonitor 工具类 | ✅ | 2026-05-15 | MemoryMonitor.kt：JVM + Native + PSS 内存监控，含预警判断 |
+| 2.9 | 实现 PerformanceTracker 工具类 | ✅ | 2026-05-15 | PerformanceTracker.kt：计时 + tok/s 统计 + 性能报告 |
 
 ### D.5 Day 3：嵌入模型集成
 
@@ -2114,5 +2114,9 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 裁剪项目完成，删除不需要的代码
 - ✅ 补全全部 37 个 Kotlin 文件的双层注释（语法注释 + 业务注释）
 - ✅ 注释覆盖：PoC 核心层、MNN 引擎层、模型配置层、工具类层、桩类层
-- ⬜ MemoryMonitor 工具类待实现（Day 2 任务 2.8）
-- ⬜ PerformanceTracker 工具类待实现（Day 2 任务 2.9）
+
+#### 2026-05-15（Day 2 最终收尾）
+- ✅ 实现 MemoryMonitor 工具类（JVM + Native + PSS 内存监控 + 预警判断）
+- ✅ 实现 PerformanceTracker 工具类（计时 + tok/s 统计 + 性能报告）
+- ✅ 更新 HomeFragment 集成 MemoryMonitor + PerformanceTracker（每 3 秒自动刷新）
+- ✅ Day 2 全部任务完成（9/9）

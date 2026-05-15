@@ -12,6 +12,9 @@ import com.poc.ondevice.databinding.FragmentHomeBinding
 import com.poc.ondevice.download.ModelDownloader
 import com.poc.ondevice.download.ModelEntry
 import com.poc.ondevice.download.ModelRegistry
+import com.poc.ondevice.util.MemoryMonitor
+import com.poc.ondevice.util.PerformanceTracker
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -39,6 +42,14 @@ class HomeFragment : Fragment() {
     // lazy {} 是 Kotlin 的属性委托，线程安全，只初始化一次
     // requireContext()：获取 Fragment 关联的 Context，如果 Fragment 未附加到 Activity 则抛异常
     private val modelDownloader by lazy { ModelDownloader(requireContext()) }
+
+    // 内存监控器（懒加载）
+    // MemoryMonitor 需要 Context 来获取 ActivityManager 系统服务
+    private val memoryMonitor by lazy { MemoryMonitor(requireContext()) }
+
+    // 性能追踪器（全局单例）
+    // 所有引擎（LLM、RAG、ASR 等）共享同一个 tracker
+    private val perfTracker by lazy { PerformanceTracker.instance }
 
     /**
      * onCreateView：创建 Fragment 的 View
@@ -70,7 +81,35 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         updateMemoryInfo()           // 显示内存使用信息
+        updatePerfInfo()             // 显示性能数据
         setupModelDownloadButtons()  // 设置模型下载按钮
+        startPeriodicRefresh()       // 启动定时刷新（每 3 秒更新内存和性能数据）
+    }
+
+    /**
+     * 启动定时刷新
+     *
+     * 为什么要定时刷新？
+     * 内存使用是动态变化的——模型加载后内存会飙升，释放后会下降
+     * 如果只在 onViewCreated 时刷新一次，用户看到的永远是初始数据
+     *
+     * lifecycleScope.launch：启动一个与 Fragment 生命周期绑定的协程
+     * delay(3000)：挂起 3 秒（不阻塞线程，只是暂停当前协程）
+     * while (true)：无限循环，直到 Fragment 销毁（lifecycleScope 自动取消）
+     */
+    private fun startPeriodicRefresh() {
+        // viewLifecycleOwner：Fragment 的 View 生命周期所有者
+        // 当 View 销毁时（onDestroyView），lifecycleScope 会自动取消所有协程
+        viewLifecycleOwner.lifecycleScope.launch {
+            // isAdded：Fragment 是否已附加到 Activity
+            // 在循环中检查是因为协程可能在 delay 期间被取消，
+            // 但取消前可能还会执行一小段代码
+            while (isAdded) {
+                delay(3000)  // 挂起 3 秒，不阻塞线程
+                updateMemoryInfo()
+                updatePerfInfo()
+            }
+        }
     }
 
     /**
@@ -232,27 +271,35 @@ class HomeFragment : Fragment() {
     /**
      * 更新内存信息显示
      *
-     * Runtime.getRuntime()：获取 Java 运行时实例
-     * - totalMemory()：JVM 当前已分配的内存
-     * - freeMemory()：JVM 当前空闲的内存
-     * - maxMemory()：JVM 最大可用内存
+     * 现在使用 MemoryMonitor 工具类，能同时显示 JVM 堆、Native 堆、系统可用内存
+     * 比之前的 Runtime.getRuntime() 方案更全面
      *
-     * 注意：这里只能看到 JVM 堆内存，Native 内存（MNN 模型加载的内存）需要另外监控
+     * MemoryMonitor 通过 Debug.getMemoryInfo() 获取全部内存段信息
+     * 包括 MNN 模型加载的 Native 内存（之前看不到的那部分）
      */
     private fun updateMemoryInfo() {
-        val runtime = Runtime.getRuntime()
-        // 已用内存 = 已分配 - 空闲
-        val usedMB = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024
-        val totalMB = runtime.totalMemory() / 1024 / 1024
-        val maxMB = runtime.maxMemory() / 1024 / 1024
+        // getFormattedReport()：返回格式化的多行内存报告
+        // 包含 JVM 堆、Native 堆、总 PSS、系统可用内存等信息
+        binding.tvMemoryInfo.text = memoryMonitor.getFormattedReport()
+    }
 
-        // buildString {}：构建多行字符串
-        // appendLine()：追加一行文字（自动加换行符）
-        binding.tvMemoryInfo.text = buildString {
-            appendLine("JVM 已用: ${usedMB}MB")
-            appendLine("JVM 已分配: ${totalMB}MB")
-            appendLine("JVM 最大可用: ${maxMB}MB")
-            appendLine("（Native 内存需加载模型后通过 Debug API 获取）")
+    /**
+     * 更新性能数据
+     *
+     * 从 PerformanceTracker 获取所有已记录的性能指标
+     * 包括各操作耗时、TTFT、tok/s 等
+     */
+    private fun updatePerfInfo() {
+        // getBriefSummary()：返回一行简短的性能摘要
+        // 例如："TTFT: 1.2s | 18.5 tok/s | RAG: 5.7s"
+        // 如果没有数据，返回 "暂无性能数据"
+        binding.tvPerfInfo.text = perfTracker.getBriefSummary()
+
+        // generateReport()：返回详细的性能报告（多行）
+        // 只有当有数据时才显示详细报告
+        val fullReport = perfTracker.generateReport()
+        if (fullReport.contains("暂无数据").not()) {
+            binding.tvPerfInfo.text = fullReport
         }
     }
 
