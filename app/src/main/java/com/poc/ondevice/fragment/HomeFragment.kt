@@ -356,13 +356,35 @@ class HomeFragment : Fragment() {
                 sb.appendLine()
                 resultView.text = sb.toString()
 
-                // ===== Step 2: 加载模型 =====
+                // ===== Step 2: 预检模型文件 =====
+                val modelFile = java.io.File(modelDir, "model.onnx")
+                val tokenizerFile = java.io.File(modelDir, "tokenizer.json")
+
+                sb.appendLine("📋 文件检查:")
+                sb.appendLine("  model.onnx: ${if (modelFile.exists()) "✅ ${modelFile.length()} bytes" else "❌ 不存在"}")
+                sb.appendLine("  tokenizer.json: ${if (tokenizerFile.exists()) "✅ ${tokenizerFile.length()} bytes" else "❌ 不存在"}")
+                sb.appendLine()
+                resultView.text = sb.toString()
+
+                if (!modelFile.exists() || modelFile.length() < 1000) {
+                    sb.appendLine("❌ model.onnx 文件异常（不存在或过小），请重新下载")
+                    resultView.text = sb.toString()
+                    return@launch
+                }
+                if (!tokenizerFile.exists() || tokenizerFile.length() < 100) {
+                    sb.appendLine("❌ tokenizer.json 文件异常（不存在或过小），请重新下载")
+                    resultView.text = sb.toString()
+                    return@launch
+                }
+
+                // ===== Step 3: 加载模型 =====
                 sb.appendLine("⏳ 正在加载模型和分词器...")
                 resultView.text = sb.toString()
 
                 val loaded = embeddingEngine.load(modelDir.absolutePath)
                 if (!loaded) {
                     sb.appendLine("❌ 模型加载失败！")
+                    sb.appendLine("  错误: ${embeddingEngine.lastError ?: "未知"}")
                     sb.appendLine("  输入名称: ${embeddingEngine.inputNames}")
                     sb.appendLine("  输出名称: ${embeddingEngine.outputNames}")
                     sb.appendLine("  请查看 Logcat 搜索 'EmbeddingEngine' 了解详情")
@@ -376,7 +398,7 @@ class HomeFragment : Fragment() {
                 sb.appendLine()
                 resultView.text = sb.toString()
 
-                // ===== Step 3: 测试分词 =====
+                // ===== Step 4: 测试编码 =====
                 sb.appendLine("⏳ 测试分词...")
                 resultView.text = sb.toString()
 
@@ -402,7 +424,7 @@ class HomeFragment : Fragment() {
                 sb.appendLine()
                 resultView.text = sb.toString()
 
-                // ===== Step 4: 相似度测试 =====
+                // ===== Step 5: 相似度测试 =====
                 val testCases = listOf(
                     Triple("药品经营许可证", "药品经营许可办理流程", "今天天气真不错"),
                     Triple("如何申请营业执照", "营业执照申请指南", "周末去哪里玩"),
@@ -451,7 +473,7 @@ class HomeFragment : Fragment() {
                     resultView.text = sb.toString()
                 }
 
-                // ===== Step 5: 性能测试 =====
+                // ===== Step 6: 性能测试 =====
                 sb.appendLine("【性能测试】")
                 resultView.text = sb.toString()
 

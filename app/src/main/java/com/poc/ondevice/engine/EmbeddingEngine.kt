@@ -73,31 +73,71 @@ class EmbeddingEngine {
                 java.io.File(modelDir).listFiles()?.forEach {
                     Log.e(TAG, "  - ${it.name} (${it.length()} bytes)")
                 }
+                lastError = "model.onnx 不存在: $modelPath"
                 return@withContext false
             }
             if (!tokenizerFile.exists()) {
                 Log.e(TAG, "tokenizer.json 不存在！路径: $tokenizerPath")
+                lastError = "tokenizer.json 不存在: $tokenizerPath"
+                return@withContext false
+            }
+
+            // 检查文件大小（防止下载不完整）
+            if (modelFile.length() < 1000) {
+                Log.e(TAG, "model.onnx 文件过小（${modelFile.length()} bytes），可能下载不完整")
+                lastError = "model.onnx 文件过小，可能下载不完整"
+                return@withContext false
+            }
+            if (tokenizerFile.length() < 100) {
+                Log.e(TAG, "tokenizer.json 文件过小（${tokenizerFile.length()} bytes），可能下载不完整")
+                lastError = "tokenizer.json 文件过小"
                 return@withContext false
             }
 
             Log.d(TAG, "model.onnx 大小: ${modelFile.length()} bytes")
             Log.d(TAG, "tokenizer.json 大小: ${tokenizerFile.length()} bytes")
 
-            // ===== Step 2: 创建 ONNX Runtime 环境 =====
-            ortEnv = OrtEnvironment.getEnvironment()
+            // ===== Step 2: 先加载分词器（纯 Kotlin，不会 native 崩溃）=====
+            tokenizer = try {
+                SimpleTokenizer(tokenizerPath)
+            } catch (e: Exception) {
+                Log.e(TAG, "SimpleTokenizer 构造异常", e)
+                lastError = "分词器构造失败: ${e.message}"
+                null
+            }
+            if (tokenizer?.isLoaded() != true) {
+                Log.e(TAG, "分词器加载失败！原因: ${tokenizer?.loadError() ?: "构造异常"}")
+                lastError = "分词器加载失败: ${tokenizer?.loadError() ?: "构造异常"}"
+                return@withContext false
+            }
+            Log.d(TAG, "SimpleTokenizer 加载成功，词表大小: ${tokenizer?.vocabSize()}")
+
+            // ===== Step 3: 创建 ONNX Runtime 环境 =====
+            ortEnv = try {
+                OrtEnvironment.getEnvironment()
+            } catch (e: Exception) {
+                Log.e(TAG, "OrtEnvironment 创建失败", e)
+                lastError = "ONNX Runtime 环境创建失败: ${e.message}"
+                return@withContext false
+            }
             Log.d(TAG, "OrtEnvironment 创建成功")
 
-            // ===== Step 3: 创建推理会话 =====
-            ortSession = ortEnv!!.createSession(modelPath)
+            // ===== Step 4: 创建推理会话（最可能 native 崩溃的地方）=====
+            ortSession = try {
+                ortEnv!!.createSession(modelPath)
+            } catch (e: Exception) {
+                Log.e(TAG, "OrtSession 创建失败", e)
+                lastError = "ONNX 模型加载失败: ${e.javaClass.simpleName}: ${e.message}"
+                return@withContext false
+            }
             Log.d(TAG, "OrtSession 创建成功")
 
             // 打印模型的输入输出信息（调试用）
             ortSession?.let { session ->
-                inputNames = session.inputNames.toList()
-                outputNames = session.outputNames.toList()
+                inputNames = try { session.inputNames.toList() } catch (e: Exception) { emptyList() }
+                outputNames = try { session.outputNames.toList() } catch (e: Exception) { emptyList() }
                 Log.d(TAG, "模型输入名称: $inputNames")
                 Log.d(TAG, "模型输出名称: $outputNames")
-                // getInputInfo() 返回 Map<String, NodeInfo>，用 key 查找
                 try {
                     val allInputInfo = session.inputInfo
                     for ((name, info) in allInputInfo) {
@@ -116,21 +156,13 @@ class EmbeddingEngine {
                 }
             }
 
-            // ===== Step 4: 加载分词器 =====
-            // 使用纯 Kotlin 实现的 SimpleTokenizer
-            // 它解析 tokenizer.json，实现 BERT WordPiece 分词
-            // 不依赖任何 native 库，Android 完全兼容
-            tokenizer = SimpleTokenizer(tokenizerPath)
-            if (tokenizer?.isLoaded() != true) {
-                Log.e(TAG, "分词器加载失败！词表为空")
-                return@withContext false
-            }
-            Log.d(TAG, "SimpleTokenizer 加载成功，词表大小: ${tokenizer?.vocabSize()}")
-
             Log.d(TAG, "嵌入模型加载完成！")
+            lastError = null
             true
-        } catch (e: Exception) {
-            Log.e(TAG, "嵌入模型加载失败", e)
+        } catch (e: Throwable) {
+            // 捕获 Throwable 而不是 Exception，能捕获 Error 和 native 崩溃
+            Log.e(TAG, "嵌入模型加载失败（Throwable）", e)
+            lastError = "加载异常: ${e.javaClass.simpleName}: ${e.message}"
             release()
             false
         }
