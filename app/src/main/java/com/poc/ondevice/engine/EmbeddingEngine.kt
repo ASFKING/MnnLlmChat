@@ -97,22 +97,22 @@ class EmbeddingEngine {
                 outputNames = session.outputNames.toList()
                 Log.d(TAG, "模型输入名称: $inputNames")
                 Log.d(TAG, "模型输出名称: $outputNames")
-                // 打印每个输入的类型和形状
-                for (name in inputNames) {
-                    try {
-                        val info = session.getInputInfo(name)
+                // getInputInfo() 返回 Map<String, NodeInfo>，用 key 查找
+                try {
+                    val allInputInfo = session.inputInfo
+                    for ((name, info) in allInputInfo) {
                         Log.d(TAG, "  输入 '$name': $info")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "  输入 '$name': 获取信息失败")
                     }
+                } catch (e: Exception) {
+                    Log.w(TAG, "  获取输入信息失败: ${e.message}")
                 }
-                for (name in outputNames) {
-                    try {
-                        val info = session.getOutputInfo(name)
+                try {
+                    val allOutputInfo = session.outputInfo
+                    for ((name, info) in allOutputInfo) {
                         Log.d(TAG, "  输出 '$name': $info")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "  输出 '$name': 获取信息失败")
                     }
+                } catch (e: Exception) {
+                    Log.w(TAG, "  获取输出信息失败: ${e.message}")
                 }
             }
 
