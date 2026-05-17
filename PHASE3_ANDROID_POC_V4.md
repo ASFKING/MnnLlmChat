@@ -1899,7 +1899,7 @@ Sherpa-MNN ASR/TTS 参考：
 
 > **创建日期**：2026-05-12
 > **最后更新**：2026-05-17 10:45 CST
-> **当前阶段**：Day 3 进行中 — 嵌入模型已注册到 ModelRegistry（hf-mirror 直接下载），准备添加 ONNX Runtime 依赖
+> **当前阶段**：Day 3 进行中 — EmbeddingEngine 已实现（含均值池化修复），待真机重新验证嵌入质量
 
 ### D.1 总览
 
@@ -1908,7 +1908,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
 | Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ✅ 已完成 | 100% |
 | Day 2 | ViewBinding + XML 搭 UI 骨架 | ✅ 已完成 | 100% |
-| Day 3 | 嵌入模型集成（ONNX Runtime + bge） | 🟡 进行中 | 45% |
+| Day 3 | 嵌入模型集成（ONNX Runtime + bge） | 🟡 进行中 | 75% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
 | Day 6 | 多模态（图片理解） | ⬜ 未开始 | 0% |
@@ -1970,9 +1970,9 @@ Sherpa-MNN ASR/TTS 参考：
 | 3.1 | 下载 bge 嵌入模型 | ✅ | 2026-05-15 | bge-large-zh-mnn 已下载（ModelScope），但无法通过 LlmSession 加载（见踩坑记录） |
 | 3.2 | 确定嵌入模型方案 | ✅ | 2026-05-15 | 改用 ONNX Runtime + bge（原始设计方案回归） |
 | 3.3 | 注册 bge ONNX 模型到 ModelRegistry | ✅ | 2026-05-17 | 改用 hf-mirror onnx-community 预导出的 bge-small-zh-v1.5 ONNX，App 内直接下载 |
-| 3.4 | 添加 ONNX Runtime + Extensions 依赖 | ⬜ | — | |
-| 3.5 | 实现 EmbeddingEngine（ONNX Runtime 版） | ⬜ | — | bge-small 512 维，符合原始设计 |
-| 3.6 | 验证嵌入质量（相似 vs 不相似文本） | ⬜ | — | |
+| 3.4 | 添加 ONNX Runtime 依赖 | ✅ | 2026-05-17 | onnxruntime 1.19.0 已在 build.gradle.kts，onnxruntime-extensions 改用纯 Kotlin SimpleTokenizer 替代 |
+| 3.5 | 实现 EmbeddingEngine（ONNX Runtime 版） | ✅ | 2026-05-17 | 含 SimpleTokenizer + EmbeddingValidator，首次测试发现取 [CLS] 导致相似度低（0.36），已改为均值池化 |
+| 3.6 | 验证嵌入质量（相似 vs 不相似文本） | 🟡 | — | 首次测试 sim(A,B)=0.3621（目标>0.8），已修复池化策略，待重新验证 |
 | 3.7 | 性能测试：单条编码耗时 | ⬜ | — | |
 
 ### D.6 Day 4：向量检索 + RAG
@@ -2091,6 +2091,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-17 | 生成完成后按钮卡在"生成中" | callbackFlow 在 session.generate() 返回后未调用 close()，添加 close() 调用 | 10min |
 | 2026-05-17 | Qwen3 空 <think> 标签显示 | thinking tokens 不通过 onProgress 回调，但标签本身会发过来。用正则 <think>\s*</think> 移除空对 | 5min |
 | 2026-05-17 | moyangzhan/bge-base-zh-v1.5-onnx 仓库 404 | 改用 onnx-community/bge-small-zh-v1.5-ONNX（HF 官方组织），URL 已验证可用 | 5min |
+| 2026-05-17 | bge 嵌入相似度只有 0.36（目标 > 0.8） | 原代码取 [CLS] 位置的向量（`arr3d[0][0]`），但 bge 模型训练时用的是均值池化（Mean Pooling）。改为对所有有效 token 的向量取平均，用 attention_mask 排除 padding。修改后需重新验证 | 20min |
 
 ### D.15 关键决策记录
 
@@ -2156,4 +2157,9 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 修复 Qwen3 空 <think> 标签显示（正则清理空对）
 - ✅ 注册 bge ONNX 嵌入模型到 ModelRegistry（hf-mirror onnx-community 直接下载）
 - ✅ 验证 bge-small-zh-v1.5 ONNX 模型下载成功（~248MB，512 维）
+- ✅ EmbeddingEngine + SimpleTokenizer + EmbeddingValidator 全部实现
+- ✅ 首次嵌入质量测试：模型加载成功，encode 返回 512 维向量，但 sim(A,B)=0.3621（目标>0.8）
+- ✅ 诊断根因：bge 模型应用均值池化（Mean Pooling），原代码取 [CLS] 位置导致相似度低
+- ✅ 修复 EmbeddingEngine：将 extractClsEmbedding 替换为 extractMeanPooledEmbedding + meanPool2D
+- ⬜ 待重新验证嵌入质量（需在真机上重新编译运行）
 - ✅ 更新 PHASE3 文档（进度跟踪、踩坑记录、决策记录、模型资源追踪）

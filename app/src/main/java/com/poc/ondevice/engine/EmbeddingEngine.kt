@@ -21,7 +21,7 @@ import kotlin.math.sqrt
  * 一句话定义：把文字变成一组坐标数字，意思相近的文字坐标也相近。
  *
  * 技术流程（4 步）：
- * 文本 → 分词（切成 token） → 推理（送进 bge 模型） → 取 [CLS] 向量 → L2 归一化
+ * 文本 → 分词（切成 token） → 推理（送进 bge 模型） → 均值池化（所有 token 向量取平均） → L2 归一化
  *
  * 分词器方案：
  * DJL 的 HuggingFaceTokenizer 依赖 Rust JNI，在 Android 上无法加载 native 库。
@@ -199,10 +199,17 @@ class EmbeddingEngine {
      *
      * 完整流程：
      * 1. 分词：文本 → token ids（数字序列）
-     * 2. 构造输入张量：token ids + attention mask
+     * 2. 构造输入张量：token ids + attention mask + token type ids
      * 3. 推理：送进 bge 模型 → 输出 [1, seq_len, 512] 的张量
-     * 4. 取 [CLS]：第一个 token 的 512 维输出就是整个句子的嵌入
+     * 4. 均值池化（Mean Pooling）：把所有 token 的向量加权平均，用 attention_mask 排除 padding
      * 5. L2 归一化：把向量长度缩放到 1
+     *
+     * 为什么用均值池化而不是取 [CLS]？
+     * bge 系列模型在训练时使用均值池化策略——把句子中所有有效 token 的隐藏状态取平均。
+     * [CLS] token 虽然在 BERT 原始设计中用于句子表示，但 bge 的训练目标是让
+     * 所有 token 的均值表示具有语义相似度。取 [CLS] 会丢失大量信息，导致相似度计算不准确。
+     *
+     * 生活类比：评价一个班级的水平，用全班平均分比只看班长的成绩更准确。
      *
      * 防御性设计：每一步都有 try-catch，出错时设置 lastError 而不是抛异常
      *
@@ -299,25 +306,28 @@ class EmbeddingEngine {
                 }
             }
 
-            // ===== Step 4: 取 [CLS] 位置的输出 =====
-            // 防御：ONNX 输出的类型可能不一致，逐层尝试解析
-            val clsEmbedding = try {
-                extractClsEmbedding(results)
+            // ===== Step 4: 均值池化（Mean Pooling）=====
+            // 为什么用均值池化？bge 模型训练时用的就是这个策略
+            // 把所有有效 token（attention_mask=1）的向量求平均，再除以有效 token 数量
+            // 这样得到的句子向量比只取 [CLS] 更能代表整个句子的语义
+            val pooledEmbedding = try {
+                extractMeanPooledEmbedding(results, attentionMask)
             } catch (e: Exception) {
-                lastError = "提取 [CLS] 嵌入失败: ${e.javaClass.simpleName}: ${e.message}"
+                lastError = "均值池化失败: ${e.javaClass.simpleName}: ${e.message}"
                 Log.e(TAG, lastError!!, e)
                 return@withContext null
             } finally {
                 try { results.close() } catch (_: Exception) {}
             }
 
-            if (clsEmbedding == null) {
-                // lastError 已经在 extractClsEmbedding 中设置了
+            if (pooledEmbedding == null) {
+                // lastError 已经在 extractMeanPooledEmbedding 中设置了
                 return@withContext null
             }
 
             // ===== Step 5: L2 归一化 =====
-            val normalized = l2Normalize(clsEmbedding)
+            // bge 模型输出的向量需要 L2 归一化后才能用余弦相似度（点积）比较
+            val normalized = l2Normalize(pooledEmbedding)
 
             // 验证输出维度
             if (normalized.size != embeddingDim) {
@@ -339,16 +349,30 @@ class EmbeddingEngine {
     }
 
     /**
-     * 从 ONNX 推理结果中提取 [CLS] 嵌入向量
+     * 从 ONNX 推理结果中提取均值池化（Mean Pooled）的嵌入向量
      *
-     * 防御性设计：ONNX 模型的输出格式可能不同
-     * - 常见格式 1：float[][][] （三维浮点数组）
-     * - 常见格式 2：OnnxTensor 对象（需要 getValue()）
-     * - 常见格式 3：Map 包含命名输出
+     * 均值池化的数学过程：
+     * 设模型输出为 H = [h₁, h₂, ..., hₙ]（n 个 token 的 512 维向量）
+     * 设 attention_mask 为 M = [m₁, m₂, ..., mₙ]（1=有效，0=padding）
      *
-     * 我们逐层尝试解析
+     * pooled = (Σ hᵢ × mᵢ) / (Σ mᵢ)
+     *
+     * 即：把所有有效 token 的向量相加，除以有效 token 的数量
+     *
+     * 为什么不用 [CLS]？
+     * bge 模型训练时用的就是均值池化，[CLS] 位置的向量不包含完整的句子语义。
+     * 用 [CLS] 会导致相似文本的相似度只有 0.3 左右（应该 > 0.8）。
+     *
+     * 防御性设计：ONNX 模型的输出格式可能不同，逐层尝试解析
+     *
+     * @param results ONNX 推理结果
+     * @param attentionMask attention mask 数组（1=有效 token，0=padding）
+     * @return 512 维的池化向量，失败返回 null
      */
-    private fun extractClsEmbedding(results: ai.onnxruntime.OrtSession.Result): FloatArray? {
+    private fun extractMeanPooledEmbedding(
+        results: ai.onnxruntime.OrtSession.Result,
+        attentionMask: LongArray
+    ): FloatArray? {
         // 先打印输出信息（第一次调用时）
         if (outputShape.isEmpty()) {
             try {
@@ -364,38 +388,48 @@ class EmbeddingEngine {
 
         val rawValue = results[0].value
 
-        // ===== 尝试 1：直接作为 Array<Array<FloatArray>> =====
+        // ===== 尝试 1：三维数组 Array<Array<FloatArray>> =====
+        // 输出形状：[batch=1, seq_len, hidden=512]
+        // 这是最常见的 ONNX BERT 输出格式
         try {
             @Suppress("UNCHECKED_CAST")
             val arr3d = rawValue as Array<Array<FloatArray>>
-            // 输出形状：[batch=1, seq_len, hidden=512]
-            // [0][0] = [CLS] token 的 512 维向量
-            return arr3d[0][0]
+            // arr3d[0] 取出 batch 维度后，得到 [seq_len, hidden]，即 Array<FloatArray>
+            // 这正是 meanPool2D 需要的格式
+            return meanPool2D(arr3d[0], attentionMask)
         } catch (e: ClassCastException) {
             Log.d(TAG, "输出不是 Array<Array<FloatArray>>，尝试其他方式...")
         }
 
-        // ===== 尝试 2：作为 FloatArray（一维展平） =====
+        // ===== 尝试 2：一维展平 FloatArray =====
+        // 某些 ONNX 导出会把三维张量展平成一维：[batch*seq_len*hidden]
         try {
             if (rawValue is FloatArray) {
-                // 一维展平格式：前 512 个元素就是 [CLS] 的嵌入
-                Log.d(TAG, "输出是一维 FloatArray，取前 $embeddingDim 个元素作为 [CLS]")
-                return rawValue.copyOfRange(0, embeddingDim)
+                Log.d(TAG, "输出是一维 FloatArray，长度: ${rawValue.size}")
+                // 计算 seq_len：总长度 / hidden_dim
+                val seqLen = rawValue.size / embeddingDim
+                if (seqLen > 0) {
+                    // 把一维数组重塑为二维 [seq_len, hidden]
+                    val reshaped = Array(seqLen) { i ->
+                        rawValue.copyOfRange(i * embeddingDim, (i + 1) * embeddingDim)
+                    }
+                    return meanPool2D(reshaped, attentionMask)
+                }
             }
         } catch (e: Exception) {
             Log.d(TAG, "输出不是 FloatArray: ${e.message}")
         }
 
-        // ===== 尝试 3：作为 Array<FloatArray>（二维） =====
+        // ===== 尝试 3：二维数组 Array<FloatArray> =====
         try {
             @Suppress("UNCHECKED_CAST")
             val arr2d = rawValue as Array<FloatArray>
-            return arr2d[0]
+            return meanPool2D(arr2d, attentionMask)
         } catch (e: ClassCastException) {
             Log.d(TAG, "输出不是 Array<FloatArray>，尝试其他方式...")
         }
 
-        // ===== 尝试 4：用反射分析类型 =====
+        // ===== 尝试 4：反射分析类型 =====
         try {
             val clazz = rawValue?.javaClass
             Log.e(TAG, "无法解析 ONNX 输出。类型: ${clazz?.name}")
@@ -414,6 +448,45 @@ class EmbeddingEngine {
         lastError = "无法从 ONNX 输出中提取嵌入向量（类型: ${rawValue?.javaClass?.name}）"
         return null
     }
+
+    /**
+     * 对三维输出的中间层做均值池化
+     *
+     * @param tokenEmbeddings [seq_len, hidden] 的二维数组，每个元素是一个 token 的 512 维向量
+     * @param attentionMask [seq_len] 的 mask 数组，1=有效 token，0=padding
+     * @return 512 维的均值池化向量
+     */
+    private fun meanPool2D(tokenEmbeddings: Array<FloatArray>, attentionMask: LongArray): FloatArray {
+        val hiddenSize = embeddingDim  // 512
+        val pooled = FloatArray(hiddenSize)
+        var validTokenCount = 0f
+
+        // 遍历每个 token
+        for (i in tokenEmbeddings.indices) {
+            // 只对有效 token（attention_mask=1）求和
+            // padding token（attention_mask=0）不参与计算
+            if (i < attentionMask.size && attentionMask[i] == 1L) {
+                for (j in 0 until hiddenSize) {
+                    pooled[j] += tokenEmbeddings[i][j]
+                }
+                validTokenCount += 1f
+            }
+        }
+
+        // 除以有效 token 数量，得到平均值
+        if (validTokenCount > 0f) {
+            for (j in 0 until hiddenSize) {
+                pooled[j] /= validTokenCount
+            }
+        } else {
+            Log.w(TAG, "均值池化：没有有效 token！attentionMask=${attentionMask.contentToString()}")
+        }
+
+        Log.d(TAG, "均值池化完成：$validTokenCount 个有效 token，输出 $hiddenSize 维向量")
+        return pooled
+    }
+
+
 
     /**
      * 描述一个值的结构（调试用）
