@@ -327,6 +327,8 @@ class HomeFragment : Fragment() {
      * 2. 对几组文本对计算嵌入向量
      * 3. 计算余弦相似度（已 L2 归一化，所以用点积）
      * 4. 验证：相似文本 > 0.8，不相似文本 < 0.3
+     *
+     * 防御性设计：每一步都有详细错误输出，不会闪退
      */
     private fun runEmbeddingTest() {
         val resultView = binding.tvEmbeddingTestResult
@@ -335,99 +337,135 @@ class HomeFragment : Fragment() {
 
         lifecycleScope.launch {
             try {
-                // Step 1: 加载模型
-                // 模型路径：/data/data/com.poc.ondevice/files/models/bge-small-zh-v1.5-onnx/
+                // ===== Step 1: 检查模型目录 =====
                 val modelDir = ModelDownloader(requireContext())
                     .getModelPath("bge-small-zh-v1.5-onnx")
 
+                val sb = StringBuilder()
+
                 if (!modelDir.exists()) {
-                    resultView.text = "❌ 模型未下载！请先下载 bge-small-zh 嵌入模型"
+                    resultView.text = "❌ 模型目录不存在！\n路径: ${modelDir.absolutePath}\n请先下载 bge-small-zh 嵌入模型"
                     return@launch
                 }
+
+                // 列出模型目录内容（调试用）
+                sb.appendLine("📂 模型目录: ${modelDir.name}")
+                modelDir.listFiles()?.forEach { file ->
+                    sb.appendLine("  ${file.name} (${file.length()} bytes)")
+                }
+                sb.appendLine()
+                resultView.text = sb.toString()
+
+                // ===== Step 2: 加载模型 =====
+                sb.appendLine("⏳ 正在加载模型和分词器...")
+                resultView.text = sb.toString()
 
                 val loaded = embeddingEngine.load(modelDir.absolutePath)
                 if (!loaded) {
-                    resultView.text = "❌ 模型加载失败！查看 Logcat 了解详情"
+                    sb.appendLine("❌ 模型加载失败！")
+                    sb.appendLine("  输入名称: ${embeddingEngine.inputNames}")
+                    sb.appendLine("  输出名称: ${embeddingEngine.outputNames}")
+                    sb.appendLine("  请查看 Logcat 搜索 'EmbeddingEngine' 了解详情")
+                    resultView.text = sb.toString()
                     return@launch
                 }
 
-                resultView.text = "✅ 模型加载成功，开始测试...\n\n"
+                sb.appendLine("✅ 模型加载成功！")
+                sb.appendLine("  输入: ${embeddingEngine.inputNames}")
+                sb.appendLine("  输出: ${embeddingEngine.outputNames}")
+                sb.appendLine()
+                resultView.text = sb.toString()
 
-                // Step 2: 定义测试文本对
-                // 每组包含两个相似文本和一个不相似文本
+                // ===== Step 3: 测试分词 =====
+                sb.appendLine("⏳ 测试分词...")
+                resultView.text = sb.toString()
+
+                val testText = "药品经营许可证"
+                val tokens = withContext(Dispatchers.Default) {
+                    // 直接调用 encode 来测试整个流程
+                    embeddingEngine.encode(testText)
+                }
+
+                if (tokens == null) {
+                    sb.appendLine("❌ encode() 返回 null！")
+                    sb.appendLine("  错误: ${embeddingEngine.lastError}")
+                    sb.appendLine("  输出形状: ${embeddingEngine.outputShape}")
+                    resultView.text = sb.toString()
+                    return@launch
+                }
+
+                sb.appendLine("✅ encode() 成功！")
+                sb.appendLine("  输入: \"$testText\"")
+                sb.appendLine("  输出维度: ${tokens.size}")
+                sb.appendLine("  输出形状: ${embeddingEngine.outputShape}")
+                sb.appendLine("  前 5 个值: ${tokens.take(5).map { "%.4f".format(it) }}")
+                sb.appendLine()
+                resultView.text = sb.toString()
+
+                // ===== Step 4: 相似度测试 =====
                 val testCases = listOf(
-                    Triple(
-                        "药品经营许可证",
-                        "药品经营许可办理流程",
-                        "今天天气真不错"
-                    ),
-                    Triple(
-                        "如何申请营业执照",
-                        "营业执照申请指南",
-                        "周末去哪里玩"
-                    ),
-                    Triple(
-                        "医疗机构执业许可",
-                        "医院执业许可证办理",
-                        "炒菜放多少盐"
-                    )
+                    Triple("药品经营许可证", "药品经营许可办理流程", "今天天气真不错"),
+                    Triple("如何申请营业执照", "营业执照申请指南", "周末去哪里玩"),
+                    Triple("医疗机构执业许可", "医院执业许可证办理", "炒菜放多少盐")
                 )
 
-                val sb = StringBuilder(resultView.text)
-
-                // Step 3: 逐组测试
                 for ((index, testCase) in testCases.withIndex()) {
                     val (textA, textB, textC) = testCase
-
-                    // withContext(Dispatchers.Default)：切换到计算线程
-                    // 嵌入推理是 CPU 密集型，不应该在主线程执行
-                    val result = withContext(Dispatchers.Default) {
-                        // encode() 把文本变成 512 维向量
-                        val vecA = embeddingEngine.encode(textA)
-                        val vecB = embeddingEngine.encode(textB)
-                        val vecC = embeddingEngine.encode(textC)
-
-                        // 余弦相似度 = 点积（因为已经 L2 归一化了）
-                        val simAB = dotProduct(vecA, vecB)
-                        val simAC = dotProduct(vecA, vecC)
-
-                        Triple(vecA, simAB, simAC)
-                    }
-
-                    val (_, simAB, simAC) = result
-
-                    // 判断是否通过
-                    // 相似文本 > 0.8，不相似文本 < 0.3
-                    val passAB = simAB > 0.8f
-                    val passAC = simAC < 0.3f
-                    val iconAB = if (passAB) "✅" else "❌"
-                    val iconAC = if (passAC) "✅" else "❌"
 
                     sb.appendLine("【测试 ${index + 1}】")
                     sb.appendLine("  A: \"$textA\"")
                     sb.appendLine("  B: \"$textB\"")
                     sb.appendLine("  C: \"$textC\"")
+                    resultView.text = sb.toString()
+
+                    val result = withContext(Dispatchers.Default) {
+                        val vecA = embeddingEngine.encode(textA)
+                        val vecB = embeddingEngine.encode(textB)
+                        val vecC = embeddingEngine.encode(textC)
+
+                        if (vecA == null || vecB == null || vecC == null) {
+                            return@withContext null
+                        }
+
+                        val simAB = dotProduct(vecA, vecB)
+                        val simAC = dotProduct(vecA, vecC)
+                        Pair(simAB, simAC)
+                    }
+
+                    if (result == null) {
+                        sb.appendLine("  ❌ encode 失败: ${embeddingEngine.lastError}")
+                        sb.appendLine()
+                        resultView.text = sb.toString()
+                        continue
+                    }
+
+                    val (simAB, simAC) = result
+                    val passAB = simAB > 0.8f
+                    val passAC = simAC < 0.3f
+                    val iconAB = if (passAB) "✅" else "❌"
+                    val iconAC = if (passAC) "✅" else "❌"
+
                     sb.appendLine("  sim(A,B) = ${"%.4f".format(simAB)} $iconAB (目标 > 0.8)")
                     sb.appendLine("  sim(A,C) = ${"%.4f".format(simAC)} $iconAC (目标 < 0.3)")
                     sb.appendLine()
-
-                    // 实时更新 UI
                     resultView.text = sb.toString()
                 }
 
-                // Step 4: 性能测试
+                // ===== Step 5: 性能测试 =====
                 sb.appendLine("【性能测试】")
+                resultView.text = sb.toString()
+
                 val perfResult = withContext(Dispatchers.Default) {
-                    val testText = "药品经营许可证办理流程"
+                    val perfText = "药品经营许可证办理流程"
                     val times = mutableListOf<Long>()
 
                     // 预热一次
-                    embeddingEngine.encode(testText)
+                    embeddingEngine.encode(perfText)
 
                     // 正式测试 5 次取平均
                     repeat(5) {
                         val start = System.currentTimeMillis()
-                        embeddingEngine.encode(testText)
+                        embeddingEngine.encode(perfText)
                         times.add(System.currentTimeMillis() - start)
                     }
                     times
@@ -438,14 +476,20 @@ class HomeFragment : Fragment() {
                 sb.appendLine("  范围: ${perfResult.min()}ms ~ ${perfResult.max()}ms")
                 sb.appendLine()
                 sb.appendLine("✅ 测试完成！")
-
                 resultView.text = sb.toString()
 
-                // 释放模型（测试完就释放，省内存）
                 embeddingEngine.release()
 
             } catch (e: Exception) {
-                resultView.text = "❌ 测试异常: ${e.message}\n${e.stackTraceToString()}"
+                // 最外层 catch：捕获所有未预期的异常
+                val errorMsg = StringBuilder()
+                errorMsg.appendLine("❌ 测试异常:")
+                errorMsg.appendLine("  类型: ${e.javaClass.simpleName}")
+                errorMsg.appendLine("  消息: ${e.message}")
+                errorMsg.appendLine()
+                errorMsg.appendLine("堆栈:")
+                errorMsg.append(e.stackTraceToString().take(500))
+                resultView.text = errorMsg.toString()
                 embeddingEngine.release()
             }
         }

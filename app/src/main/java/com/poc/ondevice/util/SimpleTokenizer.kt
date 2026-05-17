@@ -71,61 +71,114 @@ class SimpleTokenizer(private val tokenizerPath: String) {
      *
      * tokenizer.json 是 HuggingFace 的标准格式
      * 包含词表、特殊 token、预处理规则等
+     *
+     * 防御性设计：每一步都检查 null，出错时记录具体原因而不是崩溃
      */
     private fun loadTokenizer() {
         try {
             val file = File(tokenizerPath)
             if (!file.exists()) {
-                Log.e(TAG, "tokenizer.json 不存在: $tokenizerPath")
+                _loadError = "tokenizer.json 不存在: $tokenizerPath"
+                Log.e(TAG, _loadError)
                 return
             }
 
             val jsonStr = file.readText()
+            if (jsonStr.isBlank()) {
+                _loadError = "tokenizer.json 内容为空"
+                Log.e(TAG, _loadError)
+                return
+            }
+
             val json = JsonParser.parseString(jsonStr).asJsonObject
 
             // ===== 解析词表 =====
             // model.vocab: { "token": id, ... }
+            // 防御：检查 "model" 对象是否存在
             val model = json.getAsJsonObject("model")
+            if (model == null) {
+                _loadError = "tokenizer.json 缺少 'model' 字段"
+                Log.e(TAG, _loadError)
+                return
+            }
+
+            // 防御：检查 "vocab" 对象是否存在
             val vocabObj = model.getAsJsonObject("vocab")
-            for ((token, value) in vocabObj.entrySet()) {
-                vocab[token] = value.asInt
+            if (vocabObj == null) {
+                // bge 的 tokenizer 词表可能叫 "vocab" 或嵌套在不同位置
+                // 尝试从根级别查找
+                val rootVocab = json.getAsJsonObject("vocab")
+                if (rootVocab != null) {
+                    Log.d(TAG, "词表在根级别找到")
+                    for ((token, value) in rootVocab.entrySet()) {
+                        vocab[token] = value.asInt
+                    }
+                } else {
+                    _loadError = "tokenizer.json 找不到词表（检查了 model.vocab 和根级别 vocab）"
+                    Log.e(TAG, _loadError)
+                    return
+                }
+            } else {
+                for ((token, value) in vocabObj.entrySet()) {
+                    vocab[token] = value.asInt
+                }
             }
             Log.d(TAG, "词表加载完成，共 ${vocab.size} 个 token")
 
             // ===== 解析 added_tokens（特殊 token） =====
             // added_tokens 包含 [CLS], [SEP], [UNK], [PAD] 等特殊标记
-            val addedTokens = json.getAsJsonArray("added_tokens")
-            if (addedTokens != null) {
-                for (element in addedTokens) {
-                    val tokenObj = element.asJsonObject
-                    val content = tokenObj.get("content").asString
-                    val id = tokenObj.get("id").asInt
+            // 防御：added_tokens 可能不存在或格式不同
+            try {
+                val addedTokens = json.getAsJsonArray("added_tokens")
+                if (addedTokens != null) {
+                    for (element in addedTokens) {
+                        val tokenObj = element.asJsonObject
+                        val content = tokenObj?.get("content")?.asString ?: continue
+                        val id = tokenObj.get("id")?.asInt ?: continue
 
-                    when (content) {
-                        "[CLS]" -> clsTokenId = id
-                        "[SEP]" -> sepTokenId = id
-                        "[UNK]" -> unkTokenId = id
-                        "[PAD]" -> padTokenId = id
+                        when (content) {
+                            "[CLS]" -> clsTokenId = id
+                            "[SEP]" -> sepTokenId = id
+                            "[UNK]" -> unkTokenId = id
+                            "[PAD]" -> padTokenId = id
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "解析 added_tokens 失败（使用默认特殊 token ID）: ${e.message}")
             }
 
             // ===== 解析续接前缀 =====
             // model.continuing_subword_prefix: "##"
-            if (model.has("continuing_subword_prefix")) {
-                val prefix = model.get("continuing_subword_prefix").asString
-                if (prefix.isNotEmpty()) {
-                    // 我们已经在字段声明时设置了默认值 "##"
-                    Log.d(TAG, "续接前缀: $prefix")
+            try {
+                if (model.has("continuing_subword_prefix")) {
+                    val prefix = model.get("continuing_subword_prefix").asString
+                    if (prefix.isNotEmpty()) {
+                        Log.d(TAG, "续接前缀: $prefix")
+                    }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "解析 continuing_subword_prefix 失败: ${e.message}")
             }
 
             Log.d(TAG, "特殊 token: CLS=$clsTokenId, SEP=$sepTokenId, UNK=$unkTokenId, PAD=$padTokenId")
 
+            if (vocab.isEmpty()) {
+                _loadError = "词表为空，分词器无法工作"
+                Log.e(TAG, _loadError)
+            }
+
         } catch (e: Exception) {
-            Log.e(TAG, "加载 tokenizer.json 失败", e)
+            _loadError = "加载 tokenizer.json 异常: ${e.javaClass.simpleName}: ${e.message}"
+            Log.e(TAG, _loadError, e)
         }
     }
+
+    /**
+     * 加载失败的原因（调试用）
+     */
+    private var _loadError: String? = null
+    fun loadError(): String? = _loadError
 
     // ==================== 编码（文本 → token ids） ====================
 

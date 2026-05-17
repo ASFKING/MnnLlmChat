@@ -93,8 +93,27 @@ class EmbeddingEngine {
 
             // 打印模型的输入输出信息（调试用）
             ortSession?.let { session ->
-                Log.d(TAG, "模型输入: ${session.inputNames}")
-                Log.d(TAG, "模型输出: ${session.outputNames}")
+                inputNames = session.inputNames.toList()
+                outputNames = session.outputNames.toList()
+                Log.d(TAG, "模型输入名称: $inputNames")
+                Log.d(TAG, "模型输出名称: $outputNames")
+                // 打印每个输入的类型和形状
+                for (name in inputNames) {
+                    try {
+                        val info = session.getInputInfo(name)
+                        Log.d(TAG, "  输入 '$name': $info")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "  输入 '$name': 获取信息失败")
+                    }
+                }
+                for (name in outputNames) {
+                    try {
+                        val info = session.getOutputInfo(name)
+                        Log.d(TAG, "  输出 '$name': $info")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "  输出 '$name': 获取信息失败")
+                    }
+                }
             }
 
             // ===== Step 4: 加载分词器 =====
@@ -120,6 +139,30 @@ class EmbeddingEngine {
     // ==================== 文本编码 ====================
 
     /**
+     * 最近一次错误信息（调试用）
+     */
+    var lastError: String? = null
+        private set
+
+    /**
+     * 模型输入名称列表（调试用，load 成功后可读取）
+     */
+    var inputNames: List<String> = emptyList()
+        private set
+
+    /**
+     * 模型输出名称列表（调试用，load 成功后可读取）
+     */
+    var outputNames: List<String> = emptyList()
+        private set
+
+    /**
+     * 输出张量的形状（调试用，第一次 encode 后可读取）
+     */
+    var outputShape: String = ""
+        private set
+
+    /**
      * 把文本编码为嵌入向量
      *
      * 完整流程：
@@ -129,71 +172,241 @@ class EmbeddingEngine {
      * 4. 取 [CLS]：第一个 token 的 512 维输出就是整个句子的嵌入
      * 5. L2 归一化：把向量长度缩放到 1
      *
+     * 防御性设计：每一步都有 try-catch，出错时设置 lastError 而不是抛异常
+     *
      * @param text 输入文本
-     * @return 512 维的归一化浮点数组
+     * @return 512 维的归一化浮点数组，失败返回 null
      */
-    suspend fun encode(text: String): FloatArray = withContext(Dispatchers.Default) {
-        val env = ortEnv ?: throw IllegalStateException("模型未加载，请先调用 load()")
-        val session = ortSession ?: throw IllegalStateException("模型未加载，请先调用 load()")
-        val tok = tokenizer ?: throw IllegalStateException("分词器未加载，请先调用 load()")
+    suspend fun encode(text: String): FloatArray? = withContext(Dispatchers.Default) {
+        val env = ortEnv ?: run {
+            lastError = "OrtEnvironment 未初始化"
+            return@withContext null
+        }
+        val session = ortSession ?: run {
+            lastError = "OrtSession 未初始化"
+            return@withContext null
+        }
+        val tok = tokenizer ?: run {
+            lastError = "分词器未初始化"
+            return@withContext null
+        }
 
-        // ===== Step 1: 分词 =====
-        // SimpleTokenizer.encode() 把文本切成 token ids
-        // 包含 [CLS] 在开头和 [SEP] 在结尾
-        val inputIds = tok.encode(text)
-        val seqLen = inputIds.size
+        // 用于释放资源的张量列表
+        val tensorsToClose = mutableListOf<AutoCloseable>()
 
-        // 构造 attention mask（全是 1，没有 padding）
-        val attentionMask = LongArray(seqLen) { 1L }
+        try {
+            // ===== Step 1: 分词 =====
+            val inputIds = tok.encode(text)
+            val seqLen = inputIds.size
 
-        // 构造 token type ids（全是 0，单句输入）
-        val tokenTypeIds = LongArray(seqLen) { 0L }
+            if (seqLen == 0) {
+                lastError = "分词结果为空（输入: \"$text\"）"
+                return@withContext null
+            }
 
-        Log.v(TAG, "分词结果：\"$text\" → $seqLen 个 token")
+            val attentionMask = LongArray(seqLen) { 1L }
+            val tokenTypeIds = LongArray(seqLen) { 0L }
 
-        // ===== Step 2: 构造 ONNX 输入张量 =====
-        val inputIdsTensor = OnnxTensor.createTensor(
-            env, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen.toLong())
-        )
-        val attentionMaskTensor = OnnxTensor.createTensor(
-            env, LongBuffer.wrap(attentionMask), longArrayOf(1, seqLen.toLong())
-        )
-        val tokenTypeIdsTensor = OnnxTensor.createTensor(
-            env, LongBuffer.wrap(tokenTypeIds), longArrayOf(1, seqLen.toLong())
-        )
+            Log.v(TAG, "分词结果：\"$text\" → $seqLen 个 token")
 
-        // ===== Step 3: 执行推理 =====
-        val inputs = mapOf(
-            "input_ids" to inputIdsTensor,
-            "attention_mask" to attentionMaskTensor,
-            "token_type_ids" to tokenTypeIdsTensor
-        )
-        val results = session.run(inputs)
+            // ===== Step 2: 构造 ONNX 输入张量 =====
+            // 防御：逐个创建张量，捕获可能的错误
+            val inputIdsTensor = try {
+                OnnxTensor.createTensor(env, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen.toLong()))
+            } catch (e: Exception) {
+                lastError = "创建 input_ids 张量失败: ${e.message}"
+                return@withContext null
+            }
+            tensorsToClose.add(inputIdsTensor)
 
-        // ===== Step 4: 取 [CLS] 位置的输出 =====
-        // 输出形状：[1, seq_len, 512]
-        // 取 [0][0] 即 [CLS] token 的 512 维向量
-        val lastHiddenState = results[0].value as Array<Array<FloatArray>>
-        val clsEmbedding = lastHiddenState[0][0]
+            val attentionMaskTensor = try {
+                OnnxTensor.createTensor(env, LongBuffer.wrap(attentionMask), longArrayOf(1, seqLen.toLong()))
+            } catch (e: Exception) {
+                lastError = "创建 attention_mask 张量失败: ${e.message}"
+                return@withContext null
+            }
+            tensorsToClose.add(attentionMaskTensor)
 
-        // ===== Step 5: L2 归一化 =====
-        val normalized = l2Normalize(clsEmbedding)
+            val tokenTypeIdsTensor = try {
+                OnnxTensor.createTensor(env, LongBuffer.wrap(tokenTypeIds), longArrayOf(1, seqLen.toLong()))
+            } catch (e: Exception) {
+                lastError = "创建 token_type_ids 张量失败: ${e.message}"
+                return@withContext null
+            }
+            tensorsToClose.add(tokenTypeIdsTensor)
 
-        // 释放张量资源
-        inputIdsTensor.close()
-        attentionMaskTensor.close()
-        tokenTypeIdsTensor.close()
-        results.close()
+            // ===== Step 3: 执行推理 =====
+            // 防御：模型可能不接受 token_type_ids（某些 ONNX 导出没有这个输入）
+            val inputs: Map<String, OnnxTensor>
+            try {
+                // 先尝试用全部三个输入
+                inputs = mapOf(
+                    "input_ids" to inputIdsTensor,
+                    "attention_mask" to attentionMaskTensor,
+                    "token_type_ids" to tokenTypeIdsTensor
+                )
+            } catch (e: Exception) {
+                lastError = "构造输入映射失败: ${e.message}"
+                return@withContext null
+            }
 
-        normalized
+            val results = try {
+                session.run(inputs)
+            } catch (e: Exception) {
+                // 如果三个输入失败，尝试只用两个（有些模型不需要 token_type_ids）
+                Log.w(TAG, "三个输入推理失败，尝试只用 input_ids + attention_mask: ${e.message}")
+                try {
+                    val inputs2 = mapOf(
+                        "input_ids" to inputIdsTensor,
+                        "attention_mask" to attentionMaskTensor
+                    )
+                    session.run(inputs2)
+                } catch (e2: Exception) {
+                    lastError = "推理失败（尝试了两种输入组合）: ${e2.javaClass.simpleName}: ${e2.message}"
+                    return@withContext null
+                }
+            }
+
+            // ===== Step 4: 取 [CLS] 位置的输出 =====
+            // 防御：ONNX 输出的类型可能不一致，逐层尝试解析
+            val clsEmbedding = try {
+                extractClsEmbedding(results)
+            } catch (e: Exception) {
+                lastError = "提取 [CLS] 嵌入失败: ${e.javaClass.simpleName}: ${e.message}"
+                Log.e(TAG, lastError!!, e)
+                return@withContext null
+            } finally {
+                try { results.close() } catch (_: Exception) {}
+            }
+
+            if (clsEmbedding == null) {
+                // lastError 已经在 extractClsEmbedding 中设置了
+                return@withContext null
+            }
+
+            // ===== Step 5: L2 归一化 =====
+            val normalized = l2Normalize(clsEmbedding)
+
+            // 验证输出维度
+            if (normalized.size != embeddingDim) {
+                Log.w(TAG, "输出维度不匹配: 期望 $embeddingDim, 实际 ${normalized.size}")
+            }
+
+            normalized
+
+        } catch (e: Exception) {
+            lastError = "encode 异常: ${e.javaClass.simpleName}: ${e.message}"
+            Log.e(TAG, lastError!!, e)
+            null
+        } finally {
+            // 释放所有张量资源
+            for (tensor in tensorsToClose) {
+                try { tensor.close() } catch (_: Exception) {}
+            }
+        }
+    }
+
+    /**
+     * 从 ONNX 推理结果中提取 [CLS] 嵌入向量
+     *
+     * 防御性设计：ONNX 模型的输出格式可能不同
+     * - 常见格式 1：float[][][] （三维浮点数组）
+     * - 常见格式 2：OnnxTensor 对象（需要 getValue()）
+     * - 常见格式 3：Map 包含命名输出
+     *
+     * 我们逐层尝试解析
+     */
+    private fun extractClsEmbedding(results: ai.onnxruntime.OrtSession.Result): FloatArray? {
+        // 先打印输出信息（第一次调用时）
+        if (outputShape.isEmpty()) {
+            try {
+                val outputTensor = results[0]
+                val value = outputTensor.value
+                outputShape = value?.let { describeType(it) } ?: "null"
+                Log.d(TAG, "ONNX 输出类型: ${value?.javaClass?.name}")
+                Log.d(TAG, "ONNX 输出描述: $outputShape")
+            } catch (e: Exception) {
+                Log.w(TAG, "获取输出信息失败: ${e.message}")
+            }
+        }
+
+        val rawValue = results[0].value
+
+        // ===== 尝试 1：直接作为 Array<Array<FloatArray>> =====
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val arr3d = rawValue as Array<Array<FloatArray>>
+            // 输出形状：[batch=1, seq_len, hidden=512]
+            // [0][0] = [CLS] token 的 512 维向量
+            return arr3d[0][0]
+        } catch (e: ClassCastException) {
+            Log.d(TAG, "输出不是 Array<Array<FloatArray>>，尝试其他方式...")
+        }
+
+        // ===== 尝试 2：作为 FloatArray（一维展平） =====
+        try {
+            if (rawValue is FloatArray) {
+                // 一维展平格式：前 512 个元素就是 [CLS] 的嵌入
+                Log.d(TAG, "输出是一维 FloatArray，取前 $embeddingDim 个元素作为 [CLS]")
+                return rawValue.copyOfRange(0, embeddingDim)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "输出不是 FloatArray: ${e.message}")
+        }
+
+        // ===== 尝试 3：作为 Array<FloatArray>（二维） =====
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val arr2d = rawValue as Array<FloatArray>
+            return arr2d[0]
+        } catch (e: ClassCastException) {
+            Log.d(TAG, "输出不是 Array<FloatArray>，尝试其他方式...")
+        }
+
+        // ===== 尝试 4：用反射分析类型 =====
+        try {
+            val clazz = rawValue?.javaClass
+            Log.e(TAG, "无法解析 ONNX 输出。类型: ${clazz?.name}")
+            if (clazz?.isArray == true) {
+                val length = java.lang.reflect.Array.getLength(rawValue)
+                Log.e(TAG, "数组长度: $length")
+                if (length > 0) {
+                    val element = java.lang.reflect.Array.get(rawValue, 0)
+                    Log.e(TAG, "第一个元素类型: ${element?.javaClass?.name}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "反射分析失败: ${e.message}")
+        }
+
+        lastError = "无法从 ONNX 输出中提取嵌入向量（类型: ${rawValue?.javaClass?.name}）"
+        return null
+    }
+
+    /**
+     * 描述一个值的结构（调试用）
+     */
+    private fun describeType(value: Any): String {
+        val clazz = value.javaClass
+        if (!clazz.isArray) return clazz.simpleName
+
+        val sb = StringBuilder()
+        var c: Class<*> = clazz
+        while (c.isArray) {
+            sb.append("[]")
+            c = c.componentType!!
+        }
+        return "${c.simpleName}${sb}"
     }
 
     /**
      * 批量编码
+     * encode() 现在返回 FloatArray?（失败时返回 null）
+     * encodeBatch 过滤掉 null，只返回成功的向量
      */
     suspend fun encodeBatch(texts: List<String>): List<FloatArray> =
         withContext(Dispatchers.Default) {
-            texts.map { encode(it) }
+            texts.mapNotNull { encode(it) }
         }
 
     // ==================== 工具方法 ====================
