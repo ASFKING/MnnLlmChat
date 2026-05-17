@@ -54,28 +54,32 @@ object ModelRegistry {
 
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
         // bge-small-zh-v1.5 ONNX 版本，来源：hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX
-        // onnx-community 是 HuggingFace 官方 ONNX 转换组织，模型质量有保障
-        // 下载后由 ONNX Runtime 加载，用于文本嵌入和 RAG 检索
+        // onnx-community 是 HuggingFace 官方 ONNX 转换组织
+        // 注意：该模型使用外部数据格式，需要下载 model.onnx（结构）+ model.onnx_data（权重）两个文件
         ModelEntry(
             modelId = "onnx-community/bge-small-zh-v1.5-ONNX",  // 仅用于标识
             displayName = "bge-small-zh (嵌入模型)",
             description = "中文文本嵌入模型，512 维输出，用于 RAG 文档检索",
-            sizeGB = 0.25,                                      // ~248MB
+            sizeGB = 0.1,                                      // ~95MB（结构+权重）
             modelDirName = "bge-small-zh-v1.5-onnx",            // 本地存储目录名
             directFiles = listOf(
-                // 模型文件（约 248MB）
-                // hf-mirror 下载地址格式：/resolve/main/{filepath}
-                // 注意：模型在 onnx/ 子目录下
+                // 模型结构文件（约 42KB）
                 DirectFile(
                     url = "https://hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX/resolve/main/onnx/model.onnx",
                     fileName = "model.onnx",
-                    fileSize = 248_000_000                      // 约 248MB
+                    fileSize = 42_000
+                ),
+                // 模型权重文件（约 90MB）— 必须下载，否则 ONNX Runtime 无法正确加载
+                DirectFile(
+                    url = "https://hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX/resolve/main/onnx/model.onnx_data",
+                    fileName = "model.onnx_data",
+                    fileSize = 95_000_000
                 ),
                 // 分词器文件
                 DirectFile(
                     url = "https://hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX/resolve/main/tokenizer.json",
                     fileName = "tokenizer.json",
-                    fileSize = 363_000                          // 约 363KB
+                    fileSize = 363_000
                 )
             )
         )
