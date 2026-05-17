@@ -272,11 +272,15 @@ class ChatFragment : Fragment() {
                         content = lastMessage.content + token
                     )
 
-                    // 通知 RecyclerView 更新这个 item
-                    adapter.notifyItemChanged(lastIndex)
+                    // 通知 RecyclerView 局部更新（带 payload）
+                    // 传入 payload（任意非空对象）后，RecyclerView 只调用
+                    // onBindViewHolder(holder, position, payloads) 版本
+                    // 而不是完整重绘，避免闪烁
+                    adapter.notifyItemChanged(lastIndex, "update_text")
 
-                    // 滚动到底部，让用户看到最新的文字
-                    binding.rvMessages.smoothScrollToPosition(lastIndex)
+                    // 立即滚动到底部（无动画，避免 smoothScroll 的动画叠加导致抖动）
+                    // scrollToPosition 是瞬间跳转，smoothScrollToPosition 是平滑动画
+                    binding.rvMessages.scrollToPosition(lastIndex)
                 }
             } catch (e: Exception) {
                 // 如果生成过程中出错，显示错误信息
@@ -363,20 +367,43 @@ class ChatMessageAdapter(
     }
 
     /**
-     * onBindViewHolder：绑定数据到 ViewHolder
+     * onBindViewHolder：绑定数据到 ViewHolder（完整绑定，无 payload 时调用）
      *
-     * 调用时机：RecyclerView 需要把某个 position 的数据绑定到 ViewHolder 时
-     * 这里也包括 ViewHolder 被回收后复用时（position 变了，View 要更新内容）
+     * 调用时机：
+     * 1. ViewHolder 首次绑定数据
+     * 2. 调用 notifyItemChanged(position) 不带 payload 时
      *
      * @param holder 要绑定数据的 ViewHolder
      * @param position 数据在列表中的位置（从 0 开始）
      */
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        // 获取当前位置的消息
         val message = messages[position]
-        // 根据 sender 类型设置不同的显示样式
         holder.tvSender.text = if (message.sender == "user") "你" else "AI"
         holder.tvMessage.text = message.content
+    }
+
+    /**
+     * onBindViewHolder：带 payload 的局部绑定（流式更新专用）
+     *
+     * 为什么需要这个重载？
+     * 当我们调用 notifyItemChanged(position, payload) 时，
+     * RecyclerView 会调用这个版本而不是上面的完整版本。
+     * 这样只会更新文字内容，不会重绘背景、重新布局等，避免闪烁。
+     *
+     * 生活类比：上面的版本是"把整块黑板擦掉重写"，
+     * 这个版本是"只擦掉最后一行字，写上新内容"。
+     *
+     * @param payloads 变更标记列表（我们传的是 "update_text"）
+     */
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: List<Any>) {
+        if (payloads.isNotEmpty()) {
+            // 有 payload → 局部更新，只修改文字
+            val message = messages[position]
+            holder.tvMessage.text = message.content
+        } else {
+            // 无 payload → 走完整绑定
+            super.onBindViewHolder(holder, position, payloads)
+        }
     }
 
     /**
