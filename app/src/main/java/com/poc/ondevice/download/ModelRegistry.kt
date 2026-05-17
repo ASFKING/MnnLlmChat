@@ -53,28 +53,29 @@ object ModelRegistry {
         ),
 
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
-        // bge-base-zh-v1.5 ONNX 版本，来源：hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx
-        // 使用 QInt8 量化版本，体积更小，推理更快
+        // bge-small-zh-v1.5 ONNX 版本，来源：hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX
+        // onnx-community 是 HuggingFace 官方 ONNX 转换组织，模型质量有保障
         // 下载后由 ONNX Runtime 加载，用于文本嵌入和 RAG 检索
         ModelEntry(
-            modelId = "moyangzhan/bge-base-zh-v1.5-onnx",  // 仅用于标识，不走 ModelScope API
-            displayName = "bge-base-zh (嵌入模型)",
-            description = "中文文本嵌入模型，768 维输出，QInt8 量化，用于 RAG 文档检索",
-            sizeGB = 0.1,                                   // ~100MB
-            modelDirName = "bge-base-zh-v1.5-onnx",         // 本地存储目录名
+            modelId = "onnx-community/bge-small-zh-v1.5-ONNX",  // 仅用于标识
+            displayName = "bge-small-zh (嵌入模型)",
+            description = "中文文本嵌入模型，512 维输出，用于 RAG 文档检索",
+            sizeGB = 0.25,                                      // ~248MB
+            modelDirName = "bge-small-zh-v1.5-onnx",            // 本地存储目录名
             directFiles = listOf(
-                // 模型文件：QInt8 量化版（约 67MB）
-                // hf-mirror 下载地址格式：/resolve/main/{filename}
+                // 模型文件（约 248MB）
+                // hf-mirror 下载地址格式：/resolve/main/{filepath}
+                // 注意：模型在 onnx/ 子目录下
                 DirectFile(
-                    url = "https://hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx/resolve/main/model_opt2_QInt8.onnx",
-                    fileName = "model.onnx",                // 本地统一命名为 model.onnx
-                    fileSize = 67_000_000                   // 约 67MB（QInt8 量化）
+                    url = "https://hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX/resolve/main/onnx/model.onnx",
+                    fileName = "model.onnx",
+                    fileSize = 248_000_000                      // 约 248MB
                 ),
                 // 分词器文件
                 DirectFile(
-                    url = "https://hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx/resolve/main/tokenizer.json",
+                    url = "https://hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX/resolve/main/tokenizer.json",
                     fileName = "tokenizer.json",
-                    fileSize = 500_000                      // 约 500KB
+                    fileSize = 363_000                          // 约 363KB
                 )
             )
         )
