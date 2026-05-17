@@ -206,6 +206,12 @@ class LLMEngine {
                     return false
                 }
             })
+
+            // 【关键修复】generate() 返回后，必须手动关闭 Flow
+            // 不调用 close() 的话，callbackFlow 会一直处于"开放"状态
+            // 下游的 collect 会一直等待新数据，永远不会结束
+            // 导致 sendMessage() 的 finally 块不执行，按钮卡在"生成中"
+            close()
         }
 
         // awaitClose：当 Flow 被取消时执行的清理操作
