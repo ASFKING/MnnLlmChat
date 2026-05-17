@@ -1775,7 +1775,7 @@ Day 9  联调 + 性能测试 + PoC 总结
 Day 0 ✅ 所有工具安装完毕 ✅ MNN 源码克隆 ✅ 手机 adb 连接 ✅ Kotlin 基础语法
 Day 1 ✅ MnnLlmChat 跑通 ✅ 裁剪后项目编译通过 ✅ 预编译 .so 加载成功
 Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试） ✅ ChatAdapter 可用 ✅ MemoryMonitor 可用 ✅ PerformanceTracker 可用 ✅ LLM 推理接入 ✅ 对话功能可用
-Day 3 🟡 bge-large-zh-mnn 已下载但无法加载 ✅ 确定改用 ONNX Runtime + bge-small-zh-v1.5 ⬜ 导出 ONNX 模型 ⬜ ONNX Runtime 依赖配置 ⬜ EmbeddingEngine 实现 ⬜ encode() 返回正确向量 ⬜ 相似度验证通过
+Day 3 🟡 bge-large-zh-mnn 已下载但无法加载 ✅ 确定改用 ONNX Runtime + bge ✅ 注册 bge ONNX 模型到 ModelRegistry（hf-mirror 直接下载） ⬜ ONNX Runtime 依赖配置 ⬜ EmbeddingEngine 实现 ⬜ encode() 返回正确向量 ⬜ 相似度验证通过
 Day 4 ⬜ VectorStore 可用 ⬜ RAG 端到端通过 ⬜ RAGFragment 可交互
 Day 5 ⬜ 结构化提取可用 ⬜ JSON 正确率 > 90% ⬜ 文档生成可用
 Day 6 ⬜ 多模态推理可用 ⬜ 图片理解效果合理
@@ -1898,8 +1898,8 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-15 19:10 CST
-> **当前阶段**：Day 3 进行中 — 嵌入模型方案已确定（改用 ONNX Runtime + bge-small-zh-v1.5），准备导出 ONNX 模型
+> **最后更新**：2026-05-17 10:45 CST
+> **当前阶段**：Day 3 进行中 — 嵌入模型已注册到 ModelRegistry（hf-mirror 直接下载），准备添加 ONNX Runtime 依赖
 
 ### D.1 总览
 
@@ -1908,7 +1908,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Day 0 | 环境准备 + Kotlin 基础 | ✅ 已完成 | 100% |
 | Day 1 | 跑通 MnnLlmChat + 裁剪项目 | ✅ 已完成 | 100% |
 | Day 2 | ViewBinding + XML 搭 UI 骨架 | ✅ 已完成 | 100% |
-| Day 3 | 嵌入模型集成（ONNX Runtime + bge） | 🟡 进行中 | 30% |
+| Day 3 | 嵌入模型集成（ONNX Runtime + bge） | 🟡 进行中 | 45% |
 | Day 4 | 向量检索 + RAG | ⬜ 未开始 | 0% |
 | Day 5 | 结构化提取 + 文档生成 | ⬜ 未开始 | 0% |
 | Day 6 | 多模态（图片理解） | ⬜ 未开始 | 0% |
@@ -2087,6 +2087,10 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-15 | 复制 embeddings_bf16.bin → embedding.mnn.weight 后仍然加载失败 | 两者格式不同：embeddings_bf16.bin 是 DiskEmbedding 用的原始 bf16 数据，embedding.mnn.weight 应该是 MNN 权重格式 | 10min |
 | 2026-05-15 | 创建空的 embedding.mnn.weight 占位文件仍然失败 | 问题不在权重文件，而是 Llm::load() 硬编码了 LLM 的输入输出名（input_ids/attention_mask/position_ids/logits_index → logits），与 BERT 嵌入模型架构不兼容 | 20min |
 | 2026-05-15 | 最终结论：bge 嵌入模型无法通过 MNN LlmSession 加载 | LlmSession 的 C++ 层（Llm::load()）只支持 decoder-only LLM 架构，不支持 BERT encoder 架构。需要改用 ONNX Runtime 或 MNN 通用 API | — |
+| 2026-05-17 | 对话流式输出时 RecyclerView 闪烁 | Adapter 新增 onBindViewHolder(payloads) 局部更新 + scrollToPosition 替代 smoothScrollToPosition | 15min |
+| 2026-05-17 | 生成完成后按钮卡在"生成中" | callbackFlow 在 session.generate() 返回后未调用 close()，添加 close() 调用 | 10min |
+| 2026-05-17 | Qwen3 空 <think> 标签显示 | thinking tokens 不通过 onProgress 回调，但标签本身会发过来。用正则 <think>\s*</think> 移除空对 | 5min |
+| 2026-05-17 | moyangzhan/bge-base-zh-v1.5-onnx 仓库 404 | 改用 onnx-community/bge-small-zh-v1.5-ONNX（HF 官方组织），URL 已验证可用 | 5min |
 
 ### D.15 关键决策记录
 
@@ -2145,3 +2149,11 @@ Sherpa-MNN ASR/TTS 参考：
 - 🔍 发现 Llm::load() 硬编码 LLM 输入输出名，不兼容 BERT 架构
 - 🔍 发现 ModelScope 仓库的 config.json 与实际文件不同步（llm_weight 指向不存在的文件）
 - ✅ 确定 Day 3 方案：改用 ONNX Runtime + bge-small-zh-v1.5（回归原始设计方案）
+
+#### 2026-05-17（Day 3 嵌入模型注册 + Bug 修复）
+- ✅ 修复对话流式输出 RecyclerView 闪烁（Adapter payload 局部更新 + scrollToPosition）
+- ✅ 修复生成完成后按钮卡在"生成中"（callbackFlow 添加 close() 调用）
+- ✅ 修复 Qwen3 空 <think> 标签显示（正则清理空对）
+- ✅ 注册 bge ONNX 嵌入模型到 ModelRegistry（hf-mirror onnx-community 直接下载）
+- ✅ 验证 bge-small-zh-v1.5 ONNX 模型下载成功（~248MB，512 维）
+- ✅ 更新 PHASE3 文档（进度跟踪、踩坑记录、决策记录、模型资源追踪）
