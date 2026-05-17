@@ -12,10 +12,13 @@ import com.poc.ondevice.databinding.FragmentHomeBinding
 import com.poc.ondevice.download.ModelDownloader
 import com.poc.ondevice.download.ModelEntry
 import com.poc.ondevice.download.ModelRegistry
+import com.poc.ondevice.engine.EmbeddingEngine
 import com.poc.ondevice.util.MemoryMonitor
 import com.poc.ondevice.util.PerformanceTracker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * HomeFragment：系统状态页 + 模型下载
@@ -51,6 +54,9 @@ class HomeFragment : Fragment() {
     // 所有引擎（LLM、RAG、ASR 等）共享同一个 tracker
     private val perfTracker by lazy { PerformanceTracker.instance }
 
+    // 嵌入引擎（懒加载）
+    private val embeddingEngine by lazy { EmbeddingEngine() }
+
     /**
      * onCreateView：创建 Fragment 的 View
      *
@@ -83,6 +89,7 @@ class HomeFragment : Fragment() {
         updateMemoryInfo()           // 显示内存使用信息
         updatePerfInfo()             // 显示性能数据
         setupModelDownloadButtons()  // 设置模型下载按钮
+        setupEmbeddingTest()         // 设置嵌入测试按钮
         startPeriodicRefresh()       // 启动定时刷新（每 3 秒更新内存和性能数据）
     }
 
@@ -301,6 +308,156 @@ class HomeFragment : Fragment() {
         if (fullReport.contains("暂无数据").not()) {
             binding.tvPerfInfo.text = fullReport
         }
+    }
+
+    /**
+     * 设置嵌入测试按钮
+     */
+    private fun setupEmbeddingTest() {
+        binding.btnTestEmbedding.setOnClickListener {
+            runEmbeddingTest()
+        }
+    }
+
+    /**
+     * 运行嵌入质量测试
+     *
+     * 测试逻辑：
+     * 1. 加载 bge-small-zh-v1.5 模型
+     * 2. 对几组文本对计算嵌入向量
+     * 3. 计算余弦相似度（已 L2 归一化，所以用点积）
+     * 4. 验证：相似文本 > 0.8，不相似文本 < 0.3
+     */
+    private fun runEmbeddingTest() {
+        val resultView = binding.tvEmbeddingTestResult
+        resultView.visibility = View.VISIBLE
+        resultView.text = "⏳ 正在加载嵌入模型..."
+
+        lifecycleScope.launch {
+            try {
+                // Step 1: 加载模型
+                // 模型路径：/data/data/com.poc.ondevice/files/models/bge-small-zh-v1.5-onnx/
+                val modelDir = ModelDownloader(requireContext())
+                    .getModelPath("bge-small-zh-v1.5-onnx")
+
+                if (!modelDir.exists()) {
+                    resultView.text = "❌ 模型未下载！请先下载 bge-small-zh 嵌入模型"
+                    return@launch
+                }
+
+                val loaded = embeddingEngine.load(modelDir.absolutePath)
+                if (!loaded) {
+                    resultView.text = "❌ 模型加载失败！查看 Logcat 了解详情"
+                    return@launch
+                }
+
+                resultView.text = "✅ 模型加载成功，开始测试...\n\n"
+
+                // Step 2: 定义测试文本对
+                // 每组包含两个相似文本和一个不相似文本
+                val testCases = listOf(
+                    Triple(
+                        "药品经营许可证",
+                        "药品经营许可办理流程",
+                        "今天天气真不错"
+                    ),
+                    Triple(
+                        "如何申请营业执照",
+                        "营业执照申请指南",
+                        "周末去哪里玩"
+                    ),
+                    Triple(
+                        "医疗机构执业许可",
+                        "医院执业许可证办理",
+                        "炒菜放多少盐"
+                    )
+                )
+
+                val sb = StringBuilder(resultView.text)
+
+                // Step 3: 逐组测试
+                for ((index, testCase) in testCases.withIndex()) {
+                    val (textA, textB, textC) = testCase
+
+                    // withContext(Dispatchers.Default)：切换到计算线程
+                    // 嵌入推理是 CPU 密集型，不应该在主线程执行
+                    val result = withContext(Dispatchers.Default) {
+                        // encode() 把文本变成 512 维向量
+                        val vecA = embeddingEngine.encode(textA)
+                        val vecB = embeddingEngine.encode(textB)
+                        val vecC = embeddingEngine.encode(textC)
+
+                        // 余弦相似度 = 点积（因为已经 L2 归一化了）
+                        val simAB = dotProduct(vecA, vecB)
+                        val simAC = dotProduct(vecA, vecC)
+
+                        Triple(vecA, simAB, simAC)
+                    }
+
+                    val (_, simAB, simAC) = result
+
+                    // 判断是否通过
+                    // 相似文本 > 0.8，不相似文本 < 0.3
+                    val passAB = simAB > 0.8f
+                    val passAC = simAC < 0.3f
+                    val iconAB = if (passAB) "✅" else "❌"
+                    val iconAC = if (passAC) "✅" else "❌"
+
+                    sb.appendLine("【测试 ${index + 1}】")
+                    sb.appendLine("  A: \"$textA\"")
+                    sb.appendLine("  B: \"$textB\"")
+                    sb.appendLine("  C: \"$textC\"")
+                    sb.appendLine("  sim(A,B) = ${"%.4f".format(simAB)} $iconAB (目标 > 0.8)")
+                    sb.appendLine("  sim(A,C) = ${"%.4f".format(simAC)} $iconAC (目标 < 0.3)")
+                    sb.appendLine()
+
+                    // 实时更新 UI
+                    resultView.text = sb.toString()
+                }
+
+                // Step 4: 性能测试
+                sb.appendLine("【性能测试】")
+                val perfResult = withContext(Dispatchers.Default) {
+                    val testText = "药品经营许可证办理流程"
+                    val times = mutableListOf<Long>()
+
+                    // 预热一次
+                    embeddingEngine.encode(testText)
+
+                    // 正式测试 5 次取平均
+                    repeat(5) {
+                        val start = System.currentTimeMillis()
+                        embeddingEngine.encode(testText)
+                        times.add(System.currentTimeMillis() - start)
+                    }
+                    times
+                }
+
+                val avgMs = perfResult.average()
+                sb.appendLine("  单条编码耗时: ${"%.1f".format(avgMs)}ms (5 次平均)")
+                sb.appendLine("  范围: ${perfResult.min()}ms ~ ${perfResult.max()}ms")
+                sb.appendLine()
+                sb.appendLine("✅ 测试完成！")
+
+                resultView.text = sb.toString()
+
+                // 释放模型（测试完就释放，省内存）
+                embeddingEngine.release()
+
+            } catch (e: Exception) {
+                resultView.text = "❌ 测试异常: ${e.message}\n${e.stackTraceToString()}"
+                embeddingEngine.release()
+            }
+        }
+    }
+
+    /**
+     * 点积计算（两个已归一化向量的点积 = 余弦相似度）
+     */
+    private fun dotProduct(a: FloatArray, b: FloatArray): Float {
+        var sum = 0f
+        for (i in a.indices) sum += a[i] * b[i]
+        return sum
     }
 
     /**
