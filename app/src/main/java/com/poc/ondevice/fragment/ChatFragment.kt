@@ -268,9 +268,15 @@ class ChatFragment : Fragment() {
 
                     // 更新消息内容：把新 token 追加到现有内容后面
                     // copy() 创建一个新的 data class 实例（因为 val 属性不能修改）
-                    messages[lastIndex] = lastMessage.copy(
-                        content = lastMessage.content + token
-                    )
+                    var newContent = lastMessage.content + token
+
+                    // 清理空的 <think> 标签
+                    // Qwen3 的 thinking tokens 不通过 onProgress 回调发送，
+                    // 但 <think> 和 </think> 标签会发过来，导致显示 <think></think> 空标签
+                    // 用正则移除：匹配 <think> 后紧跟 <think> 或 <think>（中间只有空白）
+                    newContent = newContent.replace(Regex("<think>\\s*</think>"), "")
+
+                    messages[lastIndex] = lastMessage.copy(content = newContent)
 
                     // 通知 RecyclerView 局部更新（带 payload）
                     // 传入 payload（任意非空对象）后，RecyclerView 只调用
