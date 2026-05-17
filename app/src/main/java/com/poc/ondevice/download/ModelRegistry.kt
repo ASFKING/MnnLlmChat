@@ -52,16 +52,31 @@ object ModelRegistry {
             modelDirName = "Qwen3-4B-MNN"
         ),
 
-        // ===== 文本嵌入模型（ModelScope 来源，复用 LLM 框架）=====
-        // bge-large-zh-mnn：阿里巴巴 MNN 团队用 llmexport.py 导出的 BERT 嵌入模型
-        // 4-bit 量化，复用 libmnnllmapp.so 加载，不需要额外 JNI 或 ONNX Runtime
-        // llm_config.json 中 prompt_template: "[CLS]%s[SEP]"，key_value_shape: []（无 KV Cache）
+        // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
+        // bge-base-zh-v1.5 ONNX 版本，来源：hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx
+        // 使用 QInt8 量化版本，体积更小，推理更快
+        // 下载后由 ONNX Runtime 加载，用于文本嵌入和 RAG 检索
         ModelEntry(
-            modelId = "MNN/bge-large-zh-mnn",     // ModelScope 仓库路径
-            displayName = "bge-large-zh (嵌入模型)",
-            description = "中文文本嵌入模型，1024 维输出，4-bit 量化，用于 RAG 文档检索",
-            sizeGB = 0.22,                          // ~173MB embedding.mnn + ~43MB embeddings_bf16.bin ≈ 216MB
-            modelDirName = "bge-large-zh-mnn"
+            modelId = "moyangzhan/bge-base-zh-v1.5-onnx",  // 仅用于标识，不走 ModelScope API
+            displayName = "bge-base-zh (嵌入模型)",
+            description = "中文文本嵌入模型，768 维输出，QInt8 量化，用于 RAG 文档检索",
+            sizeGB = 0.1,                                   // ~100MB
+            modelDirName = "bge-base-zh-v1.5-onnx",         // 本地存储目录名
+            directFiles = listOf(
+                // 模型文件：QInt8 量化版（约 67MB）
+                // hf-mirror 下载地址格式：/resolve/main/{filename}
+                DirectFile(
+                    url = "https://hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx/resolve/main/model_opt2_QInt8.onnx",
+                    fileName = "model.onnx",                // 本地统一命名为 model.onnx
+                    fileSize = 67_000_000                   // 约 67MB（QInt8 量化）
+                ),
+                // 分词器文件
+                DirectFile(
+                    url = "https://hf-mirror.com/moyangzhan/bge-base-zh-v1.5-onnx/resolve/main/tokenizer.json",
+                    fileName = "tokenizer.json",
+                    fileSize = 500_000                      // 约 500KB
+                )
+            )
         )
     )
 }

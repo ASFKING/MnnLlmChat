@@ -1968,10 +1968,10 @@ Sherpa-MNN ASR/TTS 参考：
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
 | 3.1 | 下载 bge 嵌入模型 | ✅ | 2026-05-15 | bge-large-zh-mnn 已下载（ModelScope），但无法通过 LlmSession 加载（见踩坑记录） |
-| 3.2 | 确定嵌入模型方案 | ✅ | 2026-05-15 | 改用 ONNX Runtime + bge-small-zh-v1.5（原始设计方案回归） |
-| 3.3 | 导出 bge-small-zh-v1.5 为 ONNX 格式 | ⬜ | — | 用 optimum-cli 在电脑上导出，然后 adb push 到手机 |
+| 3.2 | 确定嵌入模型方案 | ✅ | 2026-05-15 | 改用 ONNX Runtime + bge（原始设计方案回归） |
+| 3.3 | 注册 bge ONNX 模型到 ModelRegistry | ✅ | 2026-05-17 | 改用 hf-mirror.com 预导出的 ONNX 模型（bge-base-zh-v1.5 QInt8），App 内直接下载，无需手动导出 |
 | 3.4 | 添加 ONNX Runtime + Extensions 依赖 | ⬜ | — | |
-| 3.5 | 实现 EmbeddingEngine（ONNX Runtime 版） | ⬜ | — | |
+| 3.5 | 实现 EmbeddingEngine（ONNX Runtime 版） | ⬜ | — | 注意：bge-base 输出 768 维（非 512），需调整 embeddingDim |
 | 3.6 | 验证嵌入质量（相似 vs 不相似文本） | ⬜ | — | |
 | 3.7 | 性能测试：单条编码耗时 | ⬜ | — | |
 
@@ -2065,7 +2065,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Qwen3-1.7B (Q4_K_M) | ~1.1GB | ⬜ | ⬜ | LLM 推理主力（备选） |
 | Qwen3-0.6B | ~0.6GB | ✅ | ✅ | 已下载，PoC 验证用 |
 | bge-large-zh-mnn | ~216MB | ✅ | ❌ | 已下载但无法通过 LlmSession 加载（架构不兼容），弃用 |
-| bge-small-zh-v1.5 (ONNX) | ~90MB | ⬜ | ⬜ | 待导出 ONNX 格式，用 ONNX Runtime 加载 |
+| bge-base-zh-v1.5 (ONNX QInt8) | ~67MB | ⬜ | ⬜ | hf-mirror 预导出，App 内直接下载，768 维输出 |
 | Qwen2.5-VL-3B | ~2.5GB | ⬜ | ⬜ | 多模态（可选） |
 | SenseVoice | ~200MB | ⬜ | ⬜ | ASR |
 | MeloTTS-zh | ~150MB | ⬜ | ⬜ | TTS |
@@ -2093,8 +2093,9 @@ Sherpa-MNN ASR/TTS 参考：
 | 日期 | 决策 | 理由 |
 |------|------|------|
 | 2026-05-12 | 项目包名使用 `com.poc.ondevice` | 与设计方案一致 |
-| 2026-05-15 | 嵌入模型弃用 bge-large-zh-mnn（MNN 格式），改用 bge-small-zh-v1.5（ONNX 格式） | MNN LlmSession 的 C++ 层只支持 decoder-only LLM 架构，不支持 BERT encoder 架构。ONNX Runtime 加载 bge 是经过大量验证的方案 |
+| 2026-05-15 | 嵌入模型弃用 bge-large-zh-mnn（MNN 格式），改用 bge（ONNX 格式） | MNN LlmSession 的 C++ 层只支持 decoder-only LLM 架构，不支持 BERT encoder 架构。ONNX Runtime 加载 bge 是经过大量验证的方案 |
 | 2026-05-15 | 嵌入模型用 ONNX Runtime 加载，不走 MNN 框架 | bge 模型很小（33M 参数），不需要 MNN 的移动端优化。ONNX Runtime 有官方 Java API，接入最简单 |
+| 2026-05-17 | 改用 hf-mirror 预导出的 bge-base-zh-v1.5 ONNX（QInt8），App 内直接下载 | 免去用户手动用 optimum-cli 导出的步骤，复用 ModelDownloader 的 directFiles 模式，体验与 LLM 模型下载一致 |
 
 ### D.16 每日进度摘要
 
