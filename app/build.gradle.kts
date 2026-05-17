@@ -124,6 +124,18 @@ dependencies {
     // 在我们项目中：结构化提取的 JSON 解析 + 模型配置加载 + 文档存储
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // ===== ONNX Runtime（嵌入模型推理，bge-small-zh-v1.5 用） =====
+    // onnxruntime：微软的跨平台推理引擎
+    // 在我们项目中：加载 bge-small-zh-v1.5 的 ONNX 模型，执行文本嵌入推理
+    // 输入 token ids → 输出 512 维向量
+    implementation(libs.onnxruntime)
+
+    // onnxruntime-extensions：ONNX Runtime 的扩展库
+    // 内置 HuggingFace BPE 分词器的 C++ 实现
+    // 在我们项目中：把中文文本分词成 token ids，喂给 bge 模型
+    // 没有它我们就得自己写 BPE 分词器（几百行代码）
+    implementation(libs.onnxruntime.extensions)
+
     // ===== Timber（日志库，原始 MNN 代码使用，比 Log.d 更方便） =====
     // Timber：Jake Wharton 开发的日志库
     // 优势：自动用类名做 TAG，支持格式化，release 版自动关闭日志
