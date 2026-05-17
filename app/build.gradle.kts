@@ -130,17 +130,10 @@ dependencies {
     // 输入 token ids → 输出 512 维向量
     implementation(libs.onnxruntime)
 
-    // ===== DJL HuggingFace Tokenizer（bge 模型分词用） =====
-    // HuggingFace 的 tokenizers 库的 Java 移植版（纯 Java，Android 兼容）
-    // 能直接加载 tokenizer.json，支持 BPE/WordPiece 等分词算法
-    // 在我们项目中：把中文文本分词成 token ids，喂给 bge 模型
-    //
-    // 为什么不用 onnxruntime-extensions？
-    // 调查发现 onnxruntime-extensions 0.12.4 的 Java API 没有独立的分词器类
-    // 它的 tokenization 是通过自定义 ONNX 算子嵌入到模型图里的
-    // 而 bge 模型是标准 ONNX 格式（input_ids/attention_mask 输入）
-    // 所以我们需要独立的分词器来生成 token ids
-    implementation(libs.djl.tokenizers)
+    // ===== 纯 Kotlin 分词器（bge 模型分词用） =====
+    // 不需要额外依赖——我们自己实现了一个轻量级的 BERT WordPiece 分词器
+    // 能解析 tokenizer.json，处理中文字符和子词切分
+    // 详见 util/SimpleTokenizer.kt
 
     // ===== Timber（日志库，原始 MNN 代码使用，比 Log.d 更方便） =====
     // Timber：Jake Wharton 开发的日志库
