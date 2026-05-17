@@ -332,7 +332,9 @@ class SimpleTokenizer(private val tokenizerPath: String) {
      */
     private fun isPunctuation(c: Char): Boolean {
         // ASCII 标点 + 中文常用标点
-        return c in "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+        // 注意：反引号 ` 用 Char 字面量单独判断，避免 Kotlin 编译器把它当成标识符转义符
+        return c in "!\"#$%&'()*+,-./:;<=>?@[\\]^_{|}~"
+                || c == '`'                                                     // 反引号单独判断
                 || c in "，。！？；：""''【】（）、—…·"
                 || c in "，。！？；：""''【】（）《》、—…·～"
     }
