@@ -78,15 +78,14 @@ class SimpleTokenizer(private val tokenizerPath: String) {
         try {
             val file = File(tokenizerPath)
             if (!file.exists()) {
-                _loadError = "tokenizer.json 不存在: $tokenizerPath"
-                Log.e(TAG, _loadError)
+                setError("tokenizer.json 不存在: $tokenizerPath")
                 return
             }
 
             val jsonStr = file.readText()
             if (jsonStr.isBlank()) {
                 _loadError = "tokenizer.json 内容为空"
-                Log.e(TAG, _loadError)
+                Log.e(TAG, _loadError ?: "")
                 return
             }
 
@@ -97,8 +96,7 @@ class SimpleTokenizer(private val tokenizerPath: String) {
             // 防御：检查 "model" 对象是否存在
             val model = json.getAsJsonObject("model")
             if (model == null) {
-                _loadError = "tokenizer.json 缺少 'model' 字段"
-                Log.e(TAG, _loadError)
+                setError("tokenizer.json 缺少 'model' 字段")
                 return
             }
 
@@ -114,8 +112,7 @@ class SimpleTokenizer(private val tokenizerPath: String) {
                         vocab[token] = value.asInt
                     }
                 } else {
-                    _loadError = "tokenizer.json 找不到词表（检查了 model.vocab 和根级别 vocab）"
-                    Log.e(TAG, _loadError)
+                    setError("tokenizer.json 找不到词表（检查了 model.vocab 和根级别 vocab）")
                     return
                 }
             } else {
@@ -164,13 +161,12 @@ class SimpleTokenizer(private val tokenizerPath: String) {
             Log.d(TAG, "特殊 token: CLS=$clsTokenId, SEP=$sepTokenId, UNK=$unkTokenId, PAD=$padTokenId")
 
             if (vocab.isEmpty()) {
-                _loadError = "词表为空，分词器无法工作"
-                Log.e(TAG, _loadError)
+                setError("词表为空，分词器无法工作")
             }
 
         } catch (e: Exception) {
             _loadError = "加载 tokenizer.json 异常: ${e.javaClass.simpleName}: ${e.message}"
-            Log.e(TAG, _loadError, e)
+            Log.e(TAG, _loadError ?: "未知错误", e)
         }
     }
 
@@ -179,6 +175,12 @@ class SimpleTokenizer(private val tokenizerPath: String) {
      */
     private var _loadError: String? = null
     fun loadError(): String? = _loadError
+
+    /** 设置错误并打印日志 */
+    private fun setError(msg: String) {
+        _loadError = msg
+        Log.e(TAG, msg)
+    }
 
     // ==================== 编码（文本 → token ids） ====================
 
