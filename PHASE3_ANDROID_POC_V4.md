@@ -1779,7 +1779,7 @@ Day 3 ✅ bge-large-zh-mnn 已下载但无法加载 ✅ 确定改用 ONNX Runtim
 Day 4 ✅ VectorStore 可用 ✅ RAGEngine 实现（分块 + 索引 + 检索 + prompt 组装） ✅ RAGFragment 编译通过 ✅ RAG 端到端验证通过（文档索引 + 基于文档的问答均正常）
 Day 5 ✅ JsonUtils 实现 ✅ ExtractionStore 实现 ✅ ChatFragment 接入结构化提取 ✅ JSON 提取验证通过 ✅ 文档生成可用
 Day 6 ✅ VisionEngine 实现 ✅ VisionFragment 修复 ✅ ModelRegistry 注册 VL 模型 ✅ 下载 Qwen3.5-2B-MNN ✅ 图片理解效果合理
-Day 7 ⬜ ASR 模型加载 ⬜ 语音识别准确率 > 90% ⬜ AudioRecorder 可用
+Day 7 🟡 ASR 模型注册 ✅ Sherpa JNI 接口 ✅ ASREngine 实现 ✅ AudioRecorder 实现 ✅ VoiceFragment 接入 ASR ⬜ SenseVoice 模型下载 ⬜ 语音识别准确率 > 90%
 Day 8 ⬜ TTS 模型加载 ⬜ 语音合成可用 ⬜ 全链路语音对话跑通
 Day 9 ⬜ 六场景联调通过 ⬜ 性能报告完成 ⬜ 离线测试通过 ⬜ PoC 总结
 ```
