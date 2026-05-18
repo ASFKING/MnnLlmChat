@@ -6,6 +6,7 @@ import com.poc.ondevice.engine.EmbeddingEngine
 import com.poc.ondevice.engine.LLMEngine
 import com.poc.ondevice.engine.RAGEngine
 import com.poc.ondevice.engine.VectorStore
+import com.poc.ondevice.engine.VisionEngine
 
 /**
  * App：Application 入口 + 全局引擎管理
@@ -49,6 +50,14 @@ class App : Application() {
     val ragEngine by lazy {
         RAGEngine(embeddingEngine, vectorStore, llmEngine)
     }
+
+    /**
+     * visionEngine：多模态视觉引擎（复用 LLMEngine）
+     *
+     * VisionEngine 不加载独立模型，而是复用 LLMEngine 的 Qwen2.5-VL 模型。
+     * 当用户选择图片理解功能时，需要先切换到 VL 模型。
+     */
+    val visionEngine by lazy { VisionEngine(llmEngine) }
 
     /**
      * onCreate：Application 创建时调用（整个 App 生命周期只调用一次）
