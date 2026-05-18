@@ -396,10 +396,12 @@ class ModelDownloader(private val context: Context) {
                 val response = gson.fromJson(responseText, MsRepoResponse::class.java)
 
                 // 过滤掉 tree 类型（目录），只保留实际文件
-                // ?. 安全调用：如果 response.Data 为 null，整个表达式返回 null
-                // ?: Elvis 操作符：如果左边为 null，返回右边的默认值
-                // filter {}：过滤列表，只保留 lambda 返回 true 的元素
-                response.data?.files?.filter { it.type != "tree" } ?: emptyList()
+                val allFiles = response.data?.files ?: emptyList()
+                Log.d(TAG, "ModelScope API returned ${allFiles.size} entries for $modelId")
+                for (f in allFiles) {
+                    Log.d(TAG, "  [${f.type}] ${f.path} (${f.size} bytes)")
+                }
+                allFiles.filter { it.type != "tree" }
             } finally {
                 // finally 块：无论成功还是失败都会执行
                 // 断开连接，释放网络资源
