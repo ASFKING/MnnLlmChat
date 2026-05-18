@@ -17,6 +17,7 @@ import com.poc.ondevice.App
 import com.poc.ondevice.databinding.FragmentVoiceBinding
 import com.poc.ondevice.download.ModelDownloader
 import com.poc.ondevice.download.ModelRegistry
+import com.poc.ondevice.util.AudioPlayer
 import com.poc.ondevice.util.AudioRecorder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -25,19 +26,17 @@ import kotlinx.coroutines.launch
 /**
  * VoiceFragment：语音对话页
  *
- * 全链路语音对话是什么（三层解释法）：
+ * 全链路语音对话（三层解释法）：
  * 一句话：用户说话 → AI 听懂 → AI 思考 → AI 说出来。
  * 生活类比：就像和朋友打电话——你说，他听，他想，他说。
  * 技术细节：AudioRecorder 录音 → ASREngine 语音识别 → LLMEngine 文本推理
  *           → TTSEngine 语音合成 → AudioPlayer 播放
  *
- * 职责：
- * - 按住说话 → ASR 语音识别（Day 7）
- * - LLM 流式回答（Day 8）
- * - TTS 语音播报（Day 8）
- * - 全链路 ASR → LLM → TTS 串联（Day 8）
- *
- * 当前状态：Day 7 — ASR 集成
+ * 完整流程：
+ * 1. 用户按住按钮 → AudioRecorder 开始录音
+ * 2. 松开按钮 → ASREngine 识别语音 → 得到文字
+ * 3. 文字送入 LLMEngine → 流式生成回答 → UI 实时显示
+ * 4. 回答完成后 → TTSEngine 合成语音 → AudioPlayer 播放
  */
 class VoiceFragment : Fragment() {
 
@@ -48,10 +47,12 @@ class VoiceFragment : Fragment() {
     // ==================== 引擎 ====================
     private val asrEngine get() = (requireActivity().application as App).asrEngine
     private val llmEngine get() = (requireActivity().application as App).llmEngine
+    private val ttsEngine get() = (requireActivity().application as App).ttsEngine
     private val modelDownloader by lazy { ModelDownloader(requireContext()) }
 
-    // ==================== 录音工具 ====================
+    // ==================== 工具 ====================
     private val audioRecorder by lazy { AudioRecorder(requireContext()) }
+    private val audioPlayer by lazy { AudioPlayer() }
 
     // ==================== 状态 ====================
     /** isRecording：是否正在录音 */
@@ -66,30 +67,27 @@ class VoiceFragment : Fragment() {
     /** isModelLoaded：ASR 模型是否已加载 */
     private var isModelLoaded = false
 
+    /** isTtsLoaded：TTS 模型是否已加载 */
+    private var isTtsLoaded = false
+
+    /** isProcessing：是否正在处理中（ASR→LLM→TTS） */
+    @Volatile
+    private var isProcessing = false
+
     // ==================== 权限请求 ====================
     /**
      * 录音权限请求器
      *
-     * registerForActivityResult：Android 推荐的权限请求方式（替代 onRequestPermissionsResult）
-     * ActivityResultContracts.RequestPermission()：请求单个权限的契约
-     *
-     * 工作流程：
-     * 1. 调用 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-     * 2. 系统弹出权限对话框，用户选择允许/拒绝
-     * 3. 回调 lambda 收到结果（granted: Boolean）
-     *
-     * 类比：就像你去借东西——先问"能借我吗？"（launch），
-     *       对方说"可以"（granted=true）或"不行"（granted=false）。
+     * registerForActivityResult：Android 推荐的权限请求方式
+     * 工作流程：launch() → 系统弹窗 → 用户选择 → 回调 lambda
      */
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            // 用户允许了录音权限，开始录音
             Log.d(TAG, "RECORD_AUDIO permission granted by user")
             startRecordingInternal()
         } else {
-            // 用户拒绝了录音权限
             Log.w(TAG, "RECORD_AUDIO permission denied by user")
             Toast.makeText(requireContext(), "需要录音权限才能使用语音功能", Toast.LENGTH_LONG).show()
             binding.tvAsrResult.text = "❌ 需要录音权限，请在系统设置中授权"
@@ -111,11 +109,13 @@ class VoiceFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupButtons()
         loadASRModel()
+        loadTTSModel()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         audioRecorder.stopRecording()
+        audioPlayer.stop()
         _binding = null
     }
 
@@ -123,12 +123,6 @@ class VoiceFragment : Fragment() {
 
     private fun setupButtons() {
         // ==================== 按住说话按钮 ====================
-        // setOnTouchListener：监听触摸事件（比 setOnClickListener 更细粒度）
-        // ACTION_DOWN：手指按下 → 开始录音
-        // ACTION_UP：手指抬起 → 停止录音 → ASR 识别
-        // 为什么用 OnTouchListener 而不是 OnClickListener？
-        // 因为我们需要区分"按下"和"抬起"两个时刻，
-        // OnClickListener 只在抬起时触发，无法在按下时开始录音。
         binding.btnTalk.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -136,13 +130,16 @@ class VoiceFragment : Fragment() {
                         Toast.makeText(requireContext(), "ASR 模型尚未加载", Toast.LENGTH_SHORT).show()
                         return@setOnTouchListener true
                     }
-                    // 检查并请求录音权限
+                    if (isProcessing) {
+                        Toast.makeText(requireContext(), "正在处理中，请稍候", Toast.LENGTH_SHORT).show()
+                        return@setOnTouchListener true
+                    }
                     checkPermissionAndRecord()
-                    true  // 返回 true 表示消费了这个事件
+                    true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isRecording) {
-                        stopRecordingAndRecognize()
+                        stopRecordingAndProcess()
                     }
                     true
                 }
@@ -153,7 +150,14 @@ class VoiceFragment : Fragment() {
         // 停止按钮：强制停止当前所有操作
         binding.btnStop.setOnClickListener {
             if (isRecording) {
-                stopRecordingAndRecognize()
+                stopRecordingAndProcess()
+            }
+            if (isProcessing) {
+                // 强制停止
+                isProcessing = false
+                audioPlayer.stop()
+                binding.btnTalk.isEnabled = true
+                binding.tvTtsStatus.text = "⏹️ 已停止"
             }
         }
     }
@@ -162,25 +166,15 @@ class VoiceFragment : Fragment() {
 
     /**
      * 检查录音权限，有权限就录音，没权限就请求
-     *
-     * Android 6.0+ 的危险权限（如 RECORD_AUDIO）必须在运行时动态申请。
-     * 光在 AndroidManifest.xml 里声明不够，必须弹窗让用户确认。
-     *
-     * 流程：
-     * 1. 检查是否已有权限 → 有则直接录音
-     * 2. 没有权限 → 弹出系统权限对话框
-     * 3. 用户选择后 → 回调 requestPermissionLauncher
      */
     private fun checkPermissionAndRecord() {
         when {
-            // 已经有权限了，直接录音
             ContextCompat.checkSelfPermission(
                 requireContext(), Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED -> {
                 Log.d(TAG, "RECORD_AUDIO permission already granted")
                 startRecordingInternal()
             }
-            // 需要请求权限
             else -> {
                 Log.d(TAG, "Requesting RECORD_AUDIO permission")
                 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -191,17 +185,13 @@ class VoiceFragment : Fragment() {
     // ==================== 模型加载 ====================
 
     /**
-     * 加载 ASR 模型
-     *
-     * 使用 Zipformer 流式模型（中英双语），MnnLlmChat 官方使用的模型。
-     * 模型约 295MB，内存占用约 300MB，适合常驻。
+     * 加载 ASR 模型（Zipformer 流式，中英双语）
      */
     private fun loadASRModel() {
         binding.tvAsrResult.text = "正在加载 ASR 模型..."
 
         lifecycleScope.launch {
             try {
-                // 从 ModelRegistry 中查找 ASR 模型（Zipformer 中英双语）
                 val asrModelEntry = ModelRegistry.defaultModels.find { entry ->
                     entry.displayName.contains("ASR", ignoreCase = true) ||
                     entry.displayName.contains("Zipformer", ignoreCase = true) ||
@@ -224,15 +214,57 @@ class VoiceFragment : Fragment() {
 
                 if (isModelLoaded) {
                     binding.tvAsrResult.text = "ASR 模型已就绪，请按住说话"
-                    binding.tvTtsStatus.text = "🔇 TTS 未就绪（Day 8 实现）"
                     Log.d(TAG, "ASR model loaded successfully")
                 } else {
-                    binding.tvAsrResult.text = "ASR 模型加载失败，请检查模型文件"
-                    Log.e(TAG, "ASR model load failed")
+                    binding.tvAsrResult.text = "ASR 模型加载失败"
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "加载 ASR 模型异常", e)
-                binding.tvAsrResult.text = "加载模型出错: ${e.message}"
+                binding.tvAsrResult.text = "加载 ASR 出错: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * 加载 TTS 模型（BertVITS2 中英双语）
+     *
+     * TTS 模型约 1.4GB，加载可能需要几秒。
+     * 加载成功后才能进行语音合成。
+     */
+    private fun loadTTSModel() {
+        binding.tvTtsStatus.text = "🔄 正在加载 TTS 模型..."
+
+        lifecycleScope.launch {
+            try {
+                val ttsModelEntry = ModelRegistry.defaultModels.find { entry ->
+                    entry.displayName.contains("TTS", ignoreCase = true) ||
+                    entry.displayName.contains("BertVITS", ignoreCase = true) ||
+                    entry.displayName.contains("语音合成", ignoreCase = true)
+                }
+
+                if (ttsModelEntry == null) {
+                    binding.tvTtsStatus.text = "❌ 未找到 TTS 模型"
+                    return@launch
+                }
+
+                val modelDir = modelDownloader.getModelPath(ttsModelEntry.modelDirName)
+                if (!modelDir.exists()) {
+                    binding.tvTtsStatus.text = "请先在首页下载 ${ttsModelEntry.displayName} 模型"
+                    return@launch
+                }
+
+                Log.d(TAG, "Loading TTS model from: ${modelDir.absolutePath}")
+                isTtsLoaded = ttsEngine.load(modelDir.absolutePath)
+
+                if (isTtsLoaded) {
+                    binding.tvTtsStatus.text = "🔊 TTS 已就绪"
+                    Log.d(TAG, "TTS model loaded successfully, sampleRate=${ttsEngine.sampleRate}")
+                } else {
+                    binding.tvTtsStatus.text = "❌ TTS 模型加载失败"
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "加载 TTS 模型异常", e)
+                binding.tvTtsStatus.text = "❌ 加载 TTS 出错: ${e.message}"
             }
         }
     }
@@ -241,29 +273,17 @@ class VoiceFragment : Fragment() {
 
     /**
      * 开始录音（内部方法，权限已确认后调用）
-     *
-     * 按下按钮且有权限时调用。启动 AudioRecorder，开始收集音频数据。
      */
     private fun startRecordingInternal() {
         isRecording = true
         collectedAudioData.clear()
 
-        // 更新 UI：按钮状态 + 提示文字
         binding.btnTalk.text = "松开结束"
         binding.tvAsrResult.text = "🎤 正在录音..."
         binding.tvLlmResponse.text = "等待语音识别完成后显示 AI 回答..."
 
-        // 启动录音协程
-        // lifecycleScope.launch：在 Fragment 生命周期内启动协程
-        // Fragment 销毁时协程自动取消，避免内存泄漏
         recordingJob = lifecycleScope.launch {
-            // startRecording() 返回 Flow<FloatArray>
-            // collect {} 逐个接收音频数据块
             audioRecorder.startRecording().collect { audioChunk ->
-                // audioChunk 是一帧音频数据（约 100ms）
-                // 把 FloatArray 展平存入 collectedAudioData
-                // 注意：这里在 IO 线程写入，join() 后在主线程读取，
-                // join() 提供了 happens-before 保证，所以是安全的
                 collectedAudioData.addAll(audioChunk.toList())
             }
             Log.d(TAG, "Recording flow ended naturally, collected ${collectedAudioData.size} samples")
@@ -273,59 +293,117 @@ class VoiceFragment : Fragment() {
     }
 
     /**
-     * 停止录音并进行 ASR 识别
+     * 停止录音并处理全链路：ASR → LLM → TTS
      *
-     * 松开按钮时调用。停止录音 → 等待 Flow 自然结束 → 把收集到的音频送入 ASR → 显示识别结果。
-     *
-     * 关键：不要立刻 cancel 协程！
-     * 用 join() 等待录音协程自然完成，确保所有数据都收集完毕。
+     * 这是语音对话的核心方法，串联三个引擎：
+     * 1. ASR：语音 → 文字
+     * 2. LLM：问题 → 回答（流式）
+     * 3. TTS：回答文字 → 语音音频 → 播放
      */
-    private fun stopRecordingAndRecognize() {
+    private fun stopRecordingAndProcess() {
         isRecording = false
-
-        // 停止 AudioRecord（isRecording = false 后 while 循环会退出，Flow 自然结束）
         audioRecorder.stopRecording()
 
-        // 更新 UI
         binding.btnTalk.text = "按住说话"
-        binding.tvAsrResult.text = "正在识别..."
+        binding.btnTalk.isEnabled = false  // 处理中禁用按钮
+        isProcessing = true
 
-        // 在新协程中：先等录音协程完成（确保数据收集完毕），再做识别
         lifecycleScope.launch {
             try {
-                // join()：等待录音协程完成
-                // 类比：等助手接完水再拿走杯子，而不是水还没接完就抢走杯子
+                // ============ Step 1: ASR 语音识别 ============
+                binding.tvAsrResult.text = "正在识别语音..."
                 recordingJob?.join()
 
                 Log.d(TAG, "Recording job finished, audio samples: ${collectedAudioData.size}")
 
                 if (collectedAudioData.isEmpty()) {
                     binding.tvAsrResult.text = "未检测到音频，请重试"
+                    resetProcessingState()
                     return@launch
                 }
 
-                // 把收集到的音频数据转成 FloatArray
                 val audioArray = collectedAudioData.toFloatArray()
+                val asrResult = asrEngine.recognize(audioArray)
 
-                // 调用 ASREngine 识别
-                val result = asrEngine.recognize(audioArray)
-
-                if (result.isNotBlank()) {
-                    binding.tvAsrResult.text = "🎤 $result"
-                    Log.d(TAG, "ASR result: $result")
-
-                    // TODO: Day 8 — 把识别结果送入 LLM 生成回答
-                    // llmEngine.generateStream(result).collect { token ->
-                    //     binding.tvLlmResponse.append(token)
-                    // }
-                } else {
+                if (asrResult.isBlank()) {
                     binding.tvAsrResult.text = "未识别到语音内容，请重试"
+                    resetProcessingState()
+                    return@launch
                 }
+
+                binding.tvAsrResult.text = "🎤 $asrResult"
+                Log.d(TAG, "ASR result: $asrResult")
+
+                // ============ Step 2: LLM 文本推理 ============
+                binding.tvLlmResponse.text = ""
+                binding.tvTtsStatus.text = "🤖 AI 正在思考..."
+
+                val llmResponse = StringBuilder()
+
+                // 检查 LLM 是否已加载
+                if (!llmEngine.isLoaded) {
+                    binding.tvLlmResponse.text = "LLM 模型未加载，请先在首页下载并加载模型"
+                    resetProcessingState()
+                    return@launch
+                }
+
+                // 流式生成：逐 token 显示
+                llmEngine.generateStream(asrResult).collect { token ->
+                    llmResponse.append(token)
+                    binding.tvLlmResponse.text = llmResponse.toString()
+                }
+
+                Log.d(TAG, "LLM response: ${llmResponse}")
+
+                // ============ Step 3: TTS 语音合成 + 播放 ============
+                val responseText = llmResponse.toString()
+
+                if (responseText.isBlank()) {
+                    binding.tvTtsStatus.text = "AI 未生成回答"
+                    resetProcessingState()
+                    return@launch
+                }
+
+                if (!isTtsLoaded) {
+                    binding.tvTtsStatus.text = "🔇 TTS 未加载，跳过语音播放"
+                    resetProcessingState()
+                    return@launch
+                }
+
+                binding.tvTtsStatus.text = "🔊 正在合成语音..."
+
+                // 一次性合成完整音频
+                val audioData = ttsEngine.synthesize(responseText)
+
+                if (audioData.isEmpty()) {
+                    binding.tvTtsStatus.text = "🔇 语音合成失败"
+                    resetProcessingState()
+                    return@launch
+                }
+
+                binding.tvTtsStatus.text = "🔊 正在播放..."
+
+                // 播放音频（阻塞直到播放完）
+                audioPlayer.playBlocking(audioData, ttsEngine.sampleRate)
+
+                binding.tvTtsStatus.text = "🔊 播放完毕"
+                Log.d(TAG, "TTS playback finished")
+
             } catch (e: Exception) {
-                Log.e(TAG, "ASR recognition failed", e)
-                binding.tvAsrResult.text = "识别失败: ${e.message}"
+                Log.e(TAG, "Voice chat pipeline failed", e)
+                binding.tvTtsStatus.text = "❌ 处理失败: ${e.message}"
+            } finally {
+                resetProcessingState()
             }
         }
+    }
+
+    /**
+     * 重置处理状态，恢复按钮可用
+     */
+    private fun resetProcessingState() {
+        isProcessing = false
+        binding.btnTalk.isEnabled = true
     }
 
     companion object {
