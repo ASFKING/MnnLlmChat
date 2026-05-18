@@ -6,6 +6,16 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- 状态信息 -->
+    <TextView
+        android:id="@+id/tv_rag_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="正在加载模型..."
+        android:textSize="13sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
     <!-- 文档管理区域 -->
     <LinearLayout
         android:layout_width="match_parent"
