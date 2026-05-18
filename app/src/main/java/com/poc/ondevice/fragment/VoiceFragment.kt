@@ -139,10 +139,11 @@ class VoiceFragment : Fragment() {
 
         lifecycleScope.launch {
             try {
-                // 从 ModelRegistry 中查找 SenseVoice 模型
+                // 从 ModelRegistry 中查找 ASR 模型（Zipformer 中英双语）
                 val asrModelEntry = ModelRegistry.defaultModels.find { entry ->
-                    entry.displayName.contains("SenseVoice", ignoreCase = true) ||
-                    entry.displayName.contains("ASR", ignoreCase = true)
+                    entry.displayName.contains("ASR", ignoreCase = true) ||
+                    entry.displayName.contains("Zipformer", ignoreCase = true) ||
+                    entry.displayName.contains("语音识别", ignoreCase = true)
                 }
 
                 if (asrModelEntry == null) {

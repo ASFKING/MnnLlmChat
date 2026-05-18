@@ -64,16 +64,16 @@ object ModelRegistry {
             modelDirName = "Qwen3.5-2B-MNN"                // 本地存储目录名
         ),
 
-        // ===== 语音识别模型（ModelScope 来源）=====
-        // SenseVoice：阿里达摩院的多语言语音理解模型
-        // 支持中/英/日/韩/粤语，还能识别情感和音频事件
-        // 离线模型（录完再识别），非流式，推理速度 < 1s
+        // ===== 语音识别模型（ModelScope 来源，MNN 格式）=====
+        // 官方 MnnLlmChat 使用的 ASR 模型：流式 Zipformer，中英双语
+        // ModelScope: MNN/sherpa-mnn-streaming-zipformer-bilingual-zh-en-2023-02-20
+        // 使用 OnlineRecognizer（流式识别），不是 OfflineRecognizer
         ModelEntry(
-            modelId = "iic/SenseVoiceSmall",
-            displayName = "SenseVoice (ASR 语音识别)",
-            description = "阿里达摩院多语言语音识别，支持中英日韩粤，含情感识别",
-            sizeGB = 0.2,
-            modelDirName = "SenseVoiceSmall"
+            modelId = "MNN/sherpa-mnn-streaming-zipformer-bilingual-zh-en-2023-02-20",
+            displayName = "Zipformer ASR (中英双语)",
+            description = "流式语音识别，中英双语，~295MB，MNN 格式",
+            sizeGB = 0.3,
+            modelDirName = "sherpa-mnn-streaming-zipformer-bilingual-zh-en-2023-02-20"
         ),
 
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
