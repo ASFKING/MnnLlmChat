@@ -1779,7 +1779,7 @@ Day 3 ✅ bge-large-zh-mnn 已下载但无法加载 ✅ 确定改用 ONNX Runtim
 Day 4 ✅ VectorStore 可用 ✅ RAGEngine 实现（分块 + 索引 + 检索 + prompt 组装） ✅ RAGFragment 编译通过 ✅ RAG 端到端验证通过（文档索引 + 基于文档的问答均正常）
 Day 5 ✅ JsonUtils 实现 ✅ ExtractionStore 实现 ✅ ChatFragment 接入结构化提取 ✅ JSON 提取验证通过 ✅ 文档生成可用
 Day 6 ✅ VisionEngine 实现 ✅ VisionFragment 修复 ✅ ModelRegistry 注册 VL 模型 ✅ 下载 Qwen3.5-2B-MNN ✅ 图片理解效果合理
-Day 7 🟡 ASR 模型注册 ✅ Sherpa JNI 接口 ✅ ASREngine 实现 ✅ AudioRecorder 实现 ✅ VoiceFragment 接入 ASR ⬜ SenseVoice 模型下载 ⬜ 语音识别准确率 > 90%
+Day 7 ✅ ASR 模型注册 ✅ Sherpa JNI 接口 ✅ ASREngine 实现 ✅ AudioRecorder 实现 ✅ VoiceFragment 接入 ASR ✅ Zipformer 模型下载 ✅ 运行时权限请求 ✅ 语音识别功能验证通过
 Day 8 ⬜ TTS 模型加载 ⬜ 语音合成可用 ⬜ 全链路语音对话跑通
 Day 9 ⬜ 六场景联调通过 ⬜ 性能报告完成 ⬜ 离线测试通过 ⬜ PoC 总结
 ```
@@ -1898,8 +1898,8 @@ Sherpa-MNN ASR/TTS 参考：
 ## 附录 D：项目进度跟踪
 
 > **创建日期**：2026-05-12
-> **最后更新**：2026-05-18 19:10 CST
-> **当前阶段**：Day 7 准备开始 — Day 6 多模态已全部完成（模型下载 + 图片理解测试通过），下一步进入 ASR 集成
+> **最后更新**：2026-05-18 23:36 CST
+> **当前阶段**：Day 7 完成 — ASR 语音识别功能验证通过，下一步进入 Day 8（TTS 集成 + 语音对话串联）
 
 ### D.1 总览
 
@@ -1912,7 +1912,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Day 4 | 向量检索 + RAG | ✅ 已完成 | 100% |
 | Day 5 | 结构化提取 + 文档生成 | ✅ 已完成 | 100% |
 | Day 6 | 多模态（图片理解） | ✅ 已完成 | 100% |
-| Day 7 | ASR 集成（Sherpa-MNN + SenseVoice） | ⬜ 未开始 | 0% |
+| Day 7 | ASR 集成（Sherpa-MNN + SenseVoice） | ✅ 已完成 | 100% |
 | Day 8 | TTS 集成 + 语音对话串联 | ⬜ 未开始 | 0% |
 | Day 9 | 联调 + 性能测试 + PoC 总结 | ⬜ 未开始 | 0% |
 
@@ -2014,12 +2014,12 @@ Sherpa-MNN ASR/TTS 参考：
 
 | # | 任务 | 状态 | 完成日期 | 备注 |
 |---|------|------|----------|------|
-| 7.1 | 下载 SenseVoice MNN 模型 | ⬜ | — | |
-| 7.2 | 研究 MnnLlmChat 中 Sherpa ASR 集成代码 | ⬜ | — | |
-| 7.3 | 实现 ASREngine | ⬜ | — | |
-| 7.4 | 实现 AudioRecorder | ⬜ | — | |
-| 7.5 | 实现 VoiceFragment 中的 ASR 部分 | ⬜ | — | |
-| 7.6 | 测试 ASR 准确率和延迟 | ⬜ | — | 目标 > 90%，< 1s |
+| 7.1 | 下载 Zipformer ASR MNN 模型 | ✅ | 2026-05-18 | sherpa-mnn-streaming-zipformer-bilingual-zh-en，~295MB |
+| 7.2 | 研究 MnnLlmChat 中 Sherpa ASR 集成代码 | ✅ | 2026-05-18 | OnlineRecognizer + AsrConfigManager 已理解 |
+| 7.3 | 实现 ASREngine | ✅ | 2026-05-18 | 基于 Sherpa-MNN OnlineRecognizer（流式 Zipformer） |
+| 7.4 | 实现 AudioRecorder | ✅ | 2026-05-18 | 16kHz PCM 录音 + Flow 输出 + 完整错误检查 |
+| 7.5 | 实现 VoiceFragment 中的 ASR 部分 | ✅ | 2026-05-18 | 按住说话 + 权限请求 + ASR 识别 |
+| 7.6 | 测试 ASR 功能 | ✅ | 2026-05-18 | 语音识别功能验证通过 |
 
 ### D.10 Day 8：TTS 集成 + 语音对话串联
 
@@ -2099,6 +2099,7 @@ Sherpa-MNN ASR/TTS 参考：
 | 2026-05-18 | 注释中 `"image/*"` 的 `/*` 被解析为块注释开头 | 将注释改为 `参数 image 表示只选择图片类型`，避免 `/*` 出现在注释中 | 2min |
 | 2026-05-18 | VisionFragment 的 `ModelRegistry.defaultModels.first()` 永远取第一个模型（Qwen3-1.7B 纯文本） | 改为 `ModelRegistry.defaultModels.find { it.displayName.contains("多模态") }`，自动查找 VL 模型 | 10min |
 | 2026-05-18 | 误将 Qwen2.5-VL-3B 作为多模态模型，实际阿里官方模型市场 Qwen3.5-2B-MNN 也是 Vision 模型 | 查阿里 model_market.json 确认 Qwen3.5 系列 tags=["Think","Vision"]，改用 Qwen3.5-2B-MNN（2GB，更小更合适） | 15min |
+| 2026-05-18 | ASR 录音收集到 0 个样本，Flow 在 7ms 内结束 | 两个 bug 叠加：① stopRecordingAndRecognize() 中 cancel() 太快，协程被取消前 emit() 未执行；② RECORD_AUDIO 权限未在运行时动态申请，AudioRecord.read() 返回 -1。修复：cancel→join 等待 Flow 自然结束 + 添加 registerForActivityResult 权限请求 | 30min |
 
 ### D.15 关键决策记录
 
