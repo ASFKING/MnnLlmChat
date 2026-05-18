@@ -52,6 +52,18 @@ object ModelRegistry {
             modelDirName = "Qwen3-4B-MNN"
         ),
 
+        // ===== 多模态视觉模型（ModelScope 来源）=====
+        // Qwen2.5-VL-3B：能同时理解图片和文字的多模态模型
+        // 3B 参数，约 2.5GB，需要 8GB+ RAM 设备
+        // 用途：图片描述、图文问答、OCR 等多模态任务
+        ModelEntry(
+            modelId = "MNN/Qwen2.5-VL-3B-Instruct-MNN",  // ModelScope 仓库路径
+            displayName = "Qwen2.5-VL-3B (多模态)",        // UI 显示名称，括号标注用途
+            description = "通义千问2.5-VL 3B 多模态模型，支持图片+文本理解，需要 8GB+ 设备",
+            sizeGB = 2.5,                                   // 模型大小，约 2.5GB
+            modelDirName = "Qwen2.5-VL-3B-Instruct-MNN"    // 本地存储目录名
+        ),
+
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
         // bge-small-zh-v1.5 ONNX 版本，来源：hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX
         // onnx-community 是 HuggingFace 官方 ONNX 转换组织
