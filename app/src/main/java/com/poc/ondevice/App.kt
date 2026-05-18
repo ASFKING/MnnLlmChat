@@ -4,6 +4,7 @@ import android.app.Application
 import com.alibaba.mls.api.ApplicationProvider
 import com.poc.ondevice.engine.EmbeddingEngine
 import com.poc.ondevice.engine.LLMEngine
+import com.poc.ondevice.engine.ASREngine
 import com.poc.ondevice.engine.RAGEngine
 import com.poc.ondevice.engine.VectorStore
 import com.poc.ondevice.engine.VisionEngine
@@ -58,6 +59,14 @@ class App : Application() {
      * 当用户选择图片理解功能时，需要先切换到 VL 模型。
      */
     val visionEngine by lazy { VisionEngine(llmEngine) }
+
+    /**
+     * asrEngine：语音识别引擎（SenseVoice 离线模型）
+     *
+     * ASREngine 封装 Sherpa-MNN 的 OfflineRecognizer，
+     * 使用 SenseVoice 模型进行中文语音识别。
+     */
+    val asrEngine by lazy { ASREngine() }
 
     /**
      * onCreate：Application 创建时调用（整个 App 生命周期只调用一次）

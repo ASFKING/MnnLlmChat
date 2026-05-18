@@ -64,6 +64,18 @@ object ModelRegistry {
             modelDirName = "Qwen3.5-2B-MNN"                // 本地存储目录名
         ),
 
+        // ===== 语音识别模型（ModelScope 来源）=====
+        // SenseVoice：阿里达摩院的多语言语音理解模型
+        // 支持中/英/日/韩/粤语，还能识别情感和音频事件
+        // 离线模型（录完再识别），非流式，推理速度 < 1s
+        ModelEntry(
+            modelId = "iic/SenseVoiceSmall",
+            displayName = "SenseVoice (ASR 语音识别)",
+            description = "阿里达摩院多语言语音识别，支持中英日韩粤，含情感识别",
+            sizeGB = 0.2,
+            modelDirName = "SenseVoiceSmall"
+        ),
+
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
         // bge-small-zh-v1.5 ONNX 版本，来源：hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX
         // onnx-community 是 HuggingFace 官方 ONNX 转换组织
