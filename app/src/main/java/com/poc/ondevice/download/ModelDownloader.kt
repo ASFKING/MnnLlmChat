@@ -329,50 +329,31 @@ class ModelDownloader(private val context: Context) {
     }
 
     /**
-     * 递归获取仓库中所有文件（展开子目录）
+     * 获取仓库中所有文件（使用 Recursive=1 一次性获取扁平化列表）
      *
-     * ModelScope API 返回的文件列表中，子目录类型为 "tree"，
-     * 需要递归调用 API 获取子目录中的实际文件。
+     * ModelScope API 的 Recursive=1 参数会返回仓库中所有文件（包括子目录里的），
+     * 每个文件的 Path 字段包含完整相对路径（如 "common/mnn_models/chinese_bert.mnn"）。
+     * 这样就不需要手动递归子目录了。
+     *
+     * 原版 MnnLlmChat 的 MsApiService.java 就是用的 Recursive=1：
+     *   @GET("api/v1/models/{group}/{path}/repo/files?Recursive=1")
      *
      * @param modelId 模型 ID（如 "MNN/bert-vits2-MNN"）
-     * @param subPath 子目录路径（如 "common"），空字符串表示根目录
-     * @return 所有实际文件的列表
+     * @return 所有实际文件的列表（已过滤掉 tree 类型的目录）
      */
     private suspend fun fetchAllFilesRecursive(
         modelId: String,
         subPath: String
     ): List<RepoFileInfo> {
-        val entries = fetchRepoFiles(modelId, subPath)
-        val result = mutableListOf<RepoFileInfo>()
-
-        for (entry in entries) {
-            if (entry.type == "tree") {
-                // 是子目录，递归获取其内容
-                val subDirPath = if (subPath.isEmpty()) entry.path else "$subPath/${entry.path}"
-                Log.d(TAG, "Recursing into directory: $subDirPath")
-                val subFiles = fetchAllFilesRecursive(modelId, subDirPath)
-                result.addAll(subFiles)
-            } else {
-                // 是实际文件，加入列表
-                val fullPath = if (subPath.isEmpty()) entry.path else "$subPath/${entry.path}"
-                result.add(RepoFileInfo(
-                    path = fullPath,
-                    size = entry.size,
-                    sha256 = entry.sha256,
-                    type = entry.type
-                ))
-            }
-        }
-
-        return result
+        // subPath 参数保留用于兼容，但实际不再需要手动递归
+        return fetchRepoFiles(modelId)
     }
 
     /**
-     * 获取仓库文件列表（支持子目录）
+     * 获取仓库文件列表（Recursive=1，一次性获取所有文件）
      *
      * @param modelId 模型 ID，格式 "group/repo"
-     * @param subPath 子目录路径（如 "common"），空字符串表示根目录
-     * @return 文件信息列表
+     * @return 文件信息列表（仅包含实际文件，不含目录）
      */
     private suspend fun fetchRepoFiles(modelId: String, subPath: String = ""): List<RepoFileInfo> {
         return withContext(Dispatchers.IO) {
@@ -382,9 +363,9 @@ class ModelDownloader(private val context: Context) {
             val group = parts[0]
             val repo = parts[1]
 
-            // 如果有子目录路径，加到 URL 中
-            val subPathParam = if (subPath.isEmpty()) "" else "&SubPath=$subPath"
-            val url = URL("$MS_API_BASE/$group/$repo/repo/files?Recursive=0$subPathParam")
+            // 关键修复：用 Recursive=1 获取所有子目录文件的扁平列表
+            // 原版 MnnLlmChat 的 MsApiService 就是这么做的
+            val url = URL("$MS_API_BASE/$group/$repo/repo/files?Recursive=1")
 
             // 打开 HTTP 连接
             // HttpURLConnection 是 Java 标准库的 HTTP 客户端
@@ -449,10 +430,10 @@ class ModelDownloader(private val context: Context) {
             val repo = parts[1]
 
             // 文件下载 URL
-            // URLEncoder.encode：把文件路径中的特殊字符编码成 URL 安全格式
-            // 例如空格变成 %20，中文变成 %XX%XX
-            val encodedPath = java.net.URLEncoder.encode(filePath, "UTF-8")
-            val url = URL("$MS_DOWNLOAD_BASE/$group/$repo/repo?FilePath=$encodedPath")
+            // 注意：不能用 URLEncoder.encode，因为它会把 "/" 也编码成 "%2F"，导致 404
+            // 原版 MnnLlmChat 直接拼接 subFile.Path，不做额外编码
+            // 对于空格等极少出现的字符，ModelScope 也能正确处理
+            val url = URL("$MS_DOWNLOAD_BASE/$group/$repo/repo?FilePath=$filePath")
 
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"

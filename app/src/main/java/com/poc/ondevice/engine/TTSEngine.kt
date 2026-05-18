@@ -60,7 +60,9 @@ class TTSEngine {
                 return@withContext false
             }
 
-            val tokensFile = findFile(modelDir, listOf("tokens.txt", "tokens.json"))
+            // 查找 tokens 文件：不同模型用不同的文件名
+            // BertVITS2 用 tokenizer.txt，MeloTTS/Sherpa 用 tokens.txt
+            val tokensFile = findFile(modelDir, listOf("tokens.txt", "tokens.json", "tokenizer.txt"))
             val lexiconFile = findFile(modelDir, listOf("lexicon.txt"))
 
             // 构建 TTS 配置
