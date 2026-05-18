@@ -15,6 +15,7 @@ import com.poc.ondevice.R
 import com.poc.ondevice.databinding.FragmentChatBinding
 import com.poc.ondevice.download.ModelDownloader
 import com.poc.ondevice.download.ModelRegistry
+import com.poc.ondevice.App
 import com.poc.ondevice.engine.LLMEngine
 import kotlinx.coroutines.launch
 import java.io.File
@@ -63,16 +64,16 @@ class ChatFragment : Fragment() {
     private lateinit var adapter: ChatMessageAdapter
 
     /**
-     * llmEngine：LLM 推理引擎
+     * llmEngine：LLM 推理引擎（从 App 获取共享实例）
      *
-     * 为什么用 by lazy？
-     * 1. 延迟创建：只有第一次访问时才创建 LLMEngine 实例
-     * 2. 线程安全：lazy 默认是线程安全的（LazyThreadSafetyMode.SYNCHRONIZED）
-     * 3. 只初始化一次：后续访问返回同一个实例
+     * 为什么从 App 获取而不是自己创建？
+     * 模型加载需要 ~1.5GB 内存，如果每个 Fragment 各加载一次就浪费了。
+     * 所以模型只在 App 级别加载一次，所有 Fragment 共享同一个引擎。
      *
-     * 类比：就像你家的热水器——你不会24小时开着，而是需要时才启动
+     * 类比：公司公共打印机——不需要每个部门各买一台
      */
-    private val llmEngine by lazy { LLMEngine() }
+    private val llmEngine: LLMEngine
+        get() = (requireActivity().application as App).llmEngine
 
     /**
      * modelDownloader：模型下载器（用于获取模型路径）
