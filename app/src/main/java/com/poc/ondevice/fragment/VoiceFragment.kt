@@ -108,6 +108,7 @@ class VoiceFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupButtons()
+        loadLLMModel()
         loadASRModel()
         loadTTSModel()
     }
@@ -183,6 +184,55 @@ class VoiceFragment : Fragment() {
     }
 
     // ==================== 模型加载 ====================
+
+    /**
+     * 加载 LLM 模型（语音对话的核心——ASR 识别出的文字需要 LLM 来回答）
+     *
+     * 为什么需要在这里加载？
+     * 用户可能直接从语音 Tab 开始对话，不一定会先去首页加载 LLM。
+     * 所以在 VoiceFragment 创建时自动加载，确保全链路可用。
+     */
+    private fun loadLLMModel() {
+        if (llmEngine.isLoaded) {
+            Log.d(TAG, "LLM model already loaded")
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                // 找到第一个 LLM 模型（非多模态、非 ASR、非 TTS、非嵌入）
+                val llmModelEntry = ModelRegistry.defaultModels.find { entry ->
+                    val name = entry.displayName.lowercase()
+                    !name.contains("多模态") && !name.contains("vl") &&
+                    !name.contains("asr") && !name.contains("zipformer") &&
+                    !name.contains("tts") && !name.contains("bertvits") &&
+                    !name.contains("supertonic") && !name.contains("嵌入") &&
+                    !name.contains("bge")
+                }
+
+                if (llmModelEntry == null) {
+                    Log.w(TAG, "No LLM model found in registry")
+                    return@launch
+                }
+
+                val modelDir = modelDownloader.getModelPath(llmModelEntry.modelDirName)
+                if (!modelDir.exists()) {
+                    Log.w(TAG, "LLM model not downloaded: ${llmModelEntry.displayName}")
+                    return@launch
+                }
+
+                Log.d(TAG, "Loading LLM model from: ${modelDir.absolutePath}")
+                val loaded = llmEngine.load(modelDir.absolutePath)
+                if (loaded) {
+                    Log.d(TAG, "LLM model loaded successfully")
+                } else {
+                    Log.e(TAG, "LLM model load failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "加载 LLM 模型异常", e)
+            }
+        }
+    }
 
     /**
      * 加载 ASR 模型（Zipformer 流式，中英双语）
