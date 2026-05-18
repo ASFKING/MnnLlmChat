@@ -17,6 +17,8 @@ import com.poc.ondevice.download.ModelDownloader
 import com.poc.ondevice.download.ModelRegistry
 import com.poc.ondevice.App
 import com.poc.ondevice.engine.LLMEngine
+import com.poc.ondevice.util.JsonUtils
+import com.poc.ondevice.data.ExtractionStore
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -79,6 +81,9 @@ class ChatFragment : Fragment() {
      */
     private val modelDownloader by lazy { ModelDownloader(requireContext()) }
 
+    /** extractionStore：提取记录存储 */
+    private val extractionStore by lazy { ExtractionStore(requireContext()) }
+
     /**
      * isGenerating：是否正在生成中
      *
@@ -115,6 +120,14 @@ class ChatFragment : Fragment() {
             val input = binding.etInput.text.toString().trim()
             if (input.isNotBlank()) {
                 sendMessage(input)
+            }
+        }
+
+        // 结构化提取按钮点击事件
+        binding.btnExtract.setOnClickListener {
+            val input = binding.etInput.text.toString().trim()
+            if (input.isNotBlank()) {
+                extractStructured(input)
             }
         }
     }
@@ -298,6 +311,114 @@ class ChatFragment : Fragment() {
                 isGenerating = false
                 binding.btnSend.isEnabled = true
                 binding.btnSend.text = "发送"
+            }
+        }
+    }
+
+    /**
+     * 结构化提取：从用户输入中提取 JSON
+     *
+     * 流程：
+     * 1. 构建提取 prompt（包含角色、示例、输入文本）
+     * 2. 调用 LLM 生成
+     * 3. 从输出中提取 JSON
+     * 4. 校验 JSON 格式
+     * 5. 保存记录并显示结果
+     *
+     * @param text 用户输入的原始文本
+     */
+    private fun extractStructured(text: String) {
+        if (isGenerating) {
+            Toast.makeText(requireContext(), "请等待当前任务完成", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!llmEngine.isLoaded) {
+            Toast.makeText(requireContext(), "模型尚未加载", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 添加用户消息
+        messages.add(ChatMessage("user", "[提取] $text"))
+        adapter.notifyItemInserted(messages.size - 1)
+        binding.rvMessages.smoothScrollToPosition(messages.size - 1)
+        binding.etInput.text?.clear()
+
+        // 添加空的 AI 消息（占位）
+        messages.add(ChatMessage("assistant", ""))
+        adapter.notifyItemInserted(messages.size - 1)
+
+        isGenerating = true
+        binding.btnSend.isEnabled = false
+        binding.btnExtract.isEnabled = false
+
+        // 构建提取 prompt
+        val prompt = JsonUtils.buildExtractPrompt(text)
+
+        lifecycleScope.launch {
+            try {
+                // 收集 LLM 输出
+                val rawOutput = StringBuilder()
+                llmEngine.generateStream(prompt).collect { token ->
+                    rawOutput.append(token)
+                    val lastIndex = messages.size - 1
+                    messages[lastIndex] = messages[lastIndex].copy(content = rawOutput.toString())
+                    adapter.notifyItemChanged(lastIndex, "update_text")
+                    binding.rvMessages.scrollToPosition(lastIndex)
+                }
+
+                // 提取 JSON
+                val jsonResult = JsonUtils.extractJson(rawOutput.toString())
+                val lastIndex = messages.size - 1
+
+                if (jsonResult != null) {
+                    // JSON 提取成功，格式化显示
+                    val prettyJson = try {
+                        // 用 JSONObject 美化输出（缩进 2 空格）
+                        org.json.JSONObject(jsonResult).toString(2)
+                    } catch (_: Exception) {
+                        // 如果是数组格式
+                        try {
+                            org.json.JSONArray(jsonResult).toString(2)
+                        } catch (_: Exception) {
+                            jsonResult
+                        }
+                    }
+
+                    messages[lastIndex] = messages[lastIndex].copy(
+                        content = "✅ 提取结果：\n$prettyJson"
+                    )
+                    adapter.notifyItemChanged(lastIndex)
+
+                    // 保存到提取记录
+                    extractionStore.save(text, jsonResult)
+
+                    // 显示统计
+                    val stats = extractionStore.getStats()
+                    Toast.makeText(
+                        requireContext(),
+                        "提取成功 (累计 ${stats.total} 次, 成功率 ${(stats.successRate * 100).toInt()}%)",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    // JSON 提取失败
+                    messages[lastIndex] = messages[lastIndex].copy(
+                        content = "❌ 未能提取有效 JSON\n原始输出：\n${rawOutput}"
+                    )
+                    adapter.notifyItemChanged(lastIndex)
+
+                    // 仍然记录（标记为空 JSON）
+                    extractionStore.save(text, "")
+                }
+            } catch (e: Exception) {
+                val lastIndex = messages.size - 1
+                messages[lastIndex] = messages[lastIndex].copy(
+                    content = "提取出错: ${e.message}"
+                )
+                adapter.notifyItemChanged(lastIndex)
+            } finally {
+                isGenerating = false
+                binding.btnSend.isEnabled = true
+                binding.btnExtract.isEnabled = true
             }
         }
     }
