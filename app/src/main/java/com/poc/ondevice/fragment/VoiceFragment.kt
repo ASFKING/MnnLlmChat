@@ -200,10 +200,11 @@ class VoiceFragment : Fragment() {
             audioRecorder.startRecording().collect { audioChunk ->
                 // audioChunk 是一帧音频数据（约 100ms）
                 // 把 FloatArray 展平存入 collectedAudioData
-                for (sample in audioChunk) {
-                    collectedAudioData.add(sample)
-                }
+                // 注意：这里在 IO 线程写入，join() 后在主线程读取，
+                // join() 提供了 happens-before 保证，所以是安全的
+                collectedAudioData.addAll(audioChunk.toList())
             }
+            Log.d(TAG, "Recording flow ended naturally, collected ${collectedAudioData.size} samples")
         }
 
         Log.d(TAG, "Recording started")
@@ -212,24 +213,33 @@ class VoiceFragment : Fragment() {
     /**
      * 停止录音并进行 ASR 识别
      *
-     * 松开按钮时调用。停止录音 → 把收集到的音频送入 ASR → 显示识别结果。
+     * 松开按钮时调用。停止录音 → 等待 Flow 自然结束 → 把收集到的音频送入 ASR → 显示识别结果。
+     *
+     * 关键修复：不要立刻 cancel 协程！
+     * 之前的 bug：stopRecording() + cancel() 太快，IO 线程的 emit() 还没执行协程就被取消了，
+     * 导致 collectedAudioData 永远是空的。
+     * 修复后：只设置 isRecording = false，让 while 循环自然退出，Flow 自然结束，
+     * 然后用 join() 等协程完成，确保所有数据都收集完毕。
      */
     private fun stopRecordingAndRecognize() {
         isRecording = false
 
-        // 停止录音（AudioRecorder.stopRecording() 会使 Flow 自然结束）
+        // 停止 AudioRecord（isRecording = false 后 while 循环会退出，Flow 自然结束）
         audioRecorder.stopRecording()
-        recordingJob?.cancel()
 
         // 更新 UI
         binding.btnTalk.text = "按住说话"
         binding.tvAsrResult.text = "正在识别..."
 
-        Log.d(TAG, "Recording stopped, audio samples: ${collectedAudioData.size}")
-
-        // 启动识别协程
+        // 在新协程中：先等录音协程完成（确保数据收集完毕），再做识别
         lifecycleScope.launch {
             try {
+                // join()：等待录音协程完成
+                // 类比：等助手接完水再拿走杯子，而不是水还没接完就抢走杯子
+                recordingJob?.join()
+
+                Log.d(TAG, "Recording job finished, audio samples: ${collectedAudioData.size}")
+
                 if (collectedAudioData.isEmpty()) {
                     binding.tvAsrResult.text = "未检测到音频，请重试"
                     return@launch
