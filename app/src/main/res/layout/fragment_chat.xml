@@ -50,6 +50,16 @@
             android:layout_marginEnd="8dp"
             android:background="@android:drawable/edit_text" />
 
+        <!-- 结构化提取按钮 -->
+        <Button
+            android:id="@+id/btn_extract"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="提取"
+            android:textSize="12sp"
+            android:minHeight="48dp"
+            android:layout_marginEnd="4dp" />
+
         <!-- 发送按钮 -->
         <Button
             android:id="@+id/btn_send"
