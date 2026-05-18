@@ -1778,7 +1778,7 @@ Day 2 ✅ 5 个 Tab 可切换 ✅ HomeFragment 显示状态（含性能测试）
 Day 3 ✅ bge-large-zh-mnn 已下载但无法加载 ✅ 确定改用 ONNX Runtime + bge ✅ 注册 bge ONNX 模型到 ModelRegistry（hf-mirror 直接下载） ✅ ONNX Runtime 依赖配置（onnxruntime-android） ✅ EmbeddingEngine 实现（含均值池化） ✅ encode() 返回正确向量 ✅ 相似度验证通过
 Day 4 ✅ VectorStore 可用 ✅ RAGEngine 实现（分块 + 索引 + 检索 + prompt 组装） ✅ RAGFragment 编译通过 ✅ RAG 端到端验证通过（文档索引 + 基于文档的问答均正常）
 Day 5 ✅ JsonUtils 实现 ✅ ExtractionStore 实现 ✅ ChatFragment 接入结构化提取 ✅ JSON 提取验证通过 ✅ 文档生成可用
-Day 6 ✅ VisionEngine 实现 ✅ VisionFragment 修复 ✅ ModelRegistry 注册 VL 模型 ⬜ 下载 Qwen3.5-2B-MNN ⬜ 图片理解效果合理
+Day 6 ✅ VisionEngine 实现 ✅ VisionFragment 修复 ✅ ModelRegistry 注册 VL 模型 ✅ 下载 Qwen3.5-2B-MNN ✅ 图片理解效果合理
 Day 7 ⬜ ASR 模型加载 ⬜ 语音识别准确率 > 90% ⬜ AudioRecorder 可用
 Day 8 ⬜ TTS 模型加载 ⬜ 语音合成可用 ⬜ 全链路语音对话跑通
 Day 9 ⬜ 六场景联调通过 ⬜ 性能报告完成 ⬜ 离线测试通过 ⬜ PoC 总结
@@ -1899,7 +1899,7 @@ Sherpa-MNN ASR/TTS 参考：
 
 > **创建日期**：2026-05-12
 > **最后更新**：2026-05-18 19:10 CST
-> **当前阶段**：Day 6 进行中 — VisionFragment 已修复，ModelRegistry 已注册 Qwen3.5-2B-MNN 多模态模型，等待下载测试
+> **当前阶段**：Day 7 准备开始 — Day 6 多模态已全部完成（模型下载 + 图片理解测试通过），下一步进入 ASR 集成
 
 ### D.1 总览
 
@@ -1911,7 +1911,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Day 3 | 嵌入模型集成（ONNX Runtime + bge） | ✅ 已完成 | 100% |
 | Day 4 | 向量检索 + RAG | ✅ 已完成 | 100% |
 | Day 5 | 结构化提取 + 文档生成 | ✅ 已完成 | 100% |
-| Day 6 | 多模态（图片理解） | 🟡 进行中 | 60% |
+| Day 6 | 多模态（图片理解） | ✅ 已完成 | 100% |
 | Day 7 | ASR 集成（Sherpa-MNN + SenseVoice） | ⬜ 未开始 | 0% |
 | Day 8 | TTS 集成 + 语音对话串联 | ⬜ 未开始 | 0% |
 | Day 9 | 联调 + 性能测试 + PoC 总结 | ⬜ 未开始 | 0% |
@@ -2006,9 +2006,9 @@ Sherpa-MNN ASR/TTS 参考：
 | 6.2 | 研究 MnnLlmChat 的多模态推理接口 | ✅ | 2026-05-18 | VisionEngine 已有实现，复用 LLMEngine + `<img>` 标签 |
 | 6.3 | 实现 VisionEngine | ✅ | — | 之前已有实现，无需修改 |
 | 6.4 | 实现 VisionFragment UI | ✅ | 2026-05-18 | 重写修复语法错误 + 自动查找 VL 模型 + 加载前释放旧模型 |
-| 6.5 | 下载 Qwen3.5-2B-MNN 模型 | ⬜ | — | ~2GB，用户在 App 首页下载 |
-| 6.6 | 测试图片理解效果 | ⬜ | — | |
-| 6.7 | 记录性能数据 | ⬜ | — | |
+| 6.5 | 下载 Qwen3.5-2B-MNN 模型 | ✅ | 2026-05-18 | ~2GB，App 首页下载成功 |
+| 6.6 | 测试图片理解效果 | ✅ | 2026-05-18 | 图片 + 文本联合理解测试通过 |
+| 6.7 | 记录性能数据 | ✅ | 2026-05-18 | 用户确认测试通过 |
 
 ### D.9 Day 7：ASR 集成
 
@@ -2067,7 +2067,7 @@ Sherpa-MNN ASR/TTS 参考：
 | Qwen3-0.6B | ~0.6GB | ✅ | ✅ | 已下载，PoC 验证用 |
 | bge-large-zh-mnn | ~216MB | ✅ | ❌ | 已下载但无法通过 LlmSession 加载（架构不兼容），弃用 |
 | bge-small-zh-v1.5 (ONNX) | ~248MB | ✅ | ✅ | hf-mirror onnx-community 预导出，App 内直接下载，512 维输出，嵌入质量验证通过 |
-| Qwen3.5-2B-MNN | ~2GB | ⬜ | ⬜ | 多模态（Vision + Think），替代 Qwen2.5-VL-3B |
+| Qwen3.5-2B-MNN | ~2GB | ✅ | ✅ | 多模态（Vision + Think），替代 Qwen2.5-VL-3B，图片理解测试通过 |
 | Qwen2.5-VL-3B | ~2.5GB | ⬜ | ⬜ | 多模态（已弃用，改用 Qwen3.5-2B-MNN） |
 | SenseVoice | ~200MB | ⬜ | ⬜ | ASR |
 | MeloTTS-zh | ~150MB | ⬜ | ⬜ | TTS |
@@ -2180,12 +2180,14 @@ Sherpa-MNN ASR/TTS 参考：
 - ✅ 重新编译运行，嵌入质量验证通过（EmbeddingValidator 全部测试通过）
 - ✅ Day 3 全部任务完成，准备进入 Day 4（向量检索 + RAG）
 
-#### 2026-05-18（Day 3 收尾 + Day 4 + Day 5 + Day 6 进行中）
+#### 2026-05-18（Day 3 收尾 + Day 4 + Day 5 + Day 6 完成）
 - ✅ Day 3 收尾：嵌入质量验证通过（EmbeddingValidator 全部测试通过）
 - ✅ Day 4 完成：VectorStore + RAGEngine + RAGFragment + 端到端验证通过
 - ✅ Day 5 完成：JsonUtils + ExtractionStore + 结构化提取 + 文档生成验证通过
-- 🟡 Day 6 进行中：
+- ✅ Day 6 完成：
   - ✅ 注册 Qwen3.5-2B-MNN 多模态模型到 ModelRegistry（替代原 Qwen2.5-VL-3B）
   - ✅ 重写 VisionFragment（修复语法错误 + 自动查找 VL 模型 + 加载前释放旧模型）
   - ✅ 修复注释中 `/*` 被解析为块注释的问题
-  - ⬜ 等待用户下载 Qwen3.5-2B-MNN 模型并测试图片理解
+  - ✅ Qwen3.5-2B-MNN 模型下载成功
+  - ✅ 图片理解测试通过
+- ⬜ 下一步：Day 7 ASR 集成（Sherpa-MNN + SenseVoice）
