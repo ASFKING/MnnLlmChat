@@ -39,9 +39,13 @@ class AudioRecorder(private val context: Context) {
     /** sampleRate：采样率，16kHz 是 ASR 的标准采样率 */
     private val sampleRate = 16000
 
-    /** isRecording：是否正在录音 */
+    /** isRecording：是否正在录音（volatile 保证多线程可见性） */
     @Volatile
     private var isRecording = false
+
+    /** recordingState：录音器当前状态（用于调试） */
+    @Volatile
+    private var recordingState = "IDLE"
 
     /**
      * 开始录音，返回音频数据流
@@ -58,64 +62,140 @@ class AudioRecorder(private val context: Context) {
      * @return 音频数据 Flow，每个元素是一帧 FloatArray（范围 -1.0 ~ 1.0）
      */
     fun startRecording(): Flow<FloatArray> = flow {
-        // 检查录音权限
+        // ============ 第一步：检查权限 ============
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(TAG, "RECORD_AUDIO permission not granted")
-            return@flow  // 没有权限，直接结束 Flow
+            Log.e(TAG, "❌ RECORD_AUDIO permission not granted")
+            recordingState = "ERROR_NO_PERMISSION"
+            return@flow
         }
+        Log.d(TAG, "✅ Permission OK")
 
-        // 计算最小缓冲区大小
+        // ============ 第二步：计算缓冲区大小 ============
         // getMinBufferSize：返回 AudioRecord 能正常工作的最小缓冲区（字节）
-        // 参数：采样率、声道配置、音频格式
+        // 返回值 > 0 才是有效值，负数表示错误
         val minBufferSize = AudioRecord.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_IN_MONO,      // 单声道（ASR 不需要立体声）
             AudioFormat.ENCODING_PCM_16BIT     // 16bit PCM（每个样本 2 字节）
         )
 
-        // 创建 AudioRecord 实例
-        // AudioSource.MIC：使用手机麦克风
-        // 缓冲区取最小值的 2 倍，避免录音时数据溢出丢失
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            minBufferSize * 2
-        )
+        // 检查 getMinBufferSize 返回值是否有效
+        if (minBufferSize <= 0) {
+            Log.e(TAG, "❌ getMinBufferSize returned invalid value: $minBufferSize")
+            recordingState = "ERROR_BAD_BUFFER_SIZE"
+            return@flow
+        }
+        Log.d(TAG, "✅ minBufferSize = $minBufferSize bytes (samples per chunk: ${minBufferSize / 2})")
 
-        // 开始录音
-        audioRecord?.startRecording()
+        // ============ 第三步：创建 AudioRecord 实例 ============
+        try {
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                minBufferSize * 2  // 缓冲区取最小值的 2 倍，避免数据溢出
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to create AudioRecord", e)
+            recordingState = "ERROR_CREATE_FAILED"
+            return@flow
+        }
+
+        // 检查 AudioRecord 是否初始化成功
+        // STATE_INITIALIZED 表示录音器就绪，可以开始录音
+        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "❌ AudioRecord not initialized. State: ${audioRecord?.state}")
+            // state 可能是 STATE_UNINITIALIZED (0) 或 STATE_INITIALIZED (1)
+            audioRecord?.release()
+            audioRecord = null
+            recordingState = "ERROR_NOT_INITIALIZED"
+            return@flow
+        }
+        Log.d(TAG, "✅ AudioRecord created and initialized")
+
+        // ============ 第四步：开始录音 ============
+        try {
+            audioRecord?.startRecording()
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ startRecording() failed", e)
+            audioRecord?.release()
+            audioRecord = null
+            recordingState = "ERROR_START_FAILED"
+            return@flow
+        }
+
+        // 检查是否真正开始录音
+        // RECORDSTATE_RECORDING (3) 表示正在录音
+        // RECORDSTATE_STOPPED (1) 表示已停止
+        val recordState = audioRecord?.recordingState
+        if (recordState != AudioRecord.RECORDSTATE_RECORDING) {
+            Log.e(TAG, "❌ startRecording() did not start. recordingState: $recordState")
+            audioRecord?.release()
+            audioRecord = null
+            recordingState = "ERROR_NOT_RECORDING"
+            return@flow
+        }
+
         isRecording = true
-        Log.d(TAG, "Recording started")
+        recordingState = "RECORDING"
+        Log.d(TAG, "🎙️ Recording started successfully (sampleRate=$sampleRate)")
 
+        // ============ 第五步：循环读取音频数据 ============
         // ShortArray 缓冲区：每次读取一帧
         // 帧大小 = 缓冲区大小 / 2（因为 Short 占 2 字节）
         // 约 100ms 一帧（16000 * 0.1 = 1600 个样本）
         val buffer = ShortArray(minBufferSize / 2)
+        var totalSamples = 0
+        var chunkCount = 0
+        var errorCount = 0
 
-        // 循环读取音频数据，直到停止录音
         while (isRecording) {
             // read()：从麦克风读取音频数据到 buffer
-            // 返回实际读取的样本数（可能小于 buffer 大小）
+            // 返回值：
+            //   > 0 : 实际读取的样本数（正常）
+            //   0   : 未读取到数据（可能是缓冲区问题）
+            //   ERROR_INVALID_OPERATION (-3) : AudioRecord 状态不对
+            //   ERROR_BAD_VALUE (-2) : 参数错误
+            //   ERROR_DEAD_OBJECT (-6) : AudioRecord 已释放
             val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-            if (read > 0) {
-                // Short → Float 归一化
-                // AudioRecord 输出的 Short 范围是 -32768 ~ 32767
-                // ASR 引擎需要 Float 范围是 -1.0 ~ 1.0
-                // 所以每个样本除以 32768f
-                val floatBuffer = FloatArray(read) { i ->
-                    buffer[i].toFloat() / 32768f
+
+            when {
+                read > 0 -> {
+                    // 正常：读取到数据
+                    val floatBuffer = FloatArray(read) { i ->
+                        buffer[i].toFloat() / 32768f
+                    }
+                    totalSamples += read
+                    chunkCount++
+                    emit(floatBuffer)
                 }
-                // emit()：向 Flow 发射一帧数据
-                // 调用方的 collect {} 会收到这个数据
-                emit(floatBuffer)
+                read == 0 -> {
+                    // read() 返回 0：未读取到数据，但不是错误
+                    // 继续循环，下次可能就有数据了
+                    errorCount++
+                    if (errorCount <= 3) {
+                        Log.w(TAG, "⚠️ read() returned 0 (attempt $errorCount)")
+                    }
+                }
+                read < 0 -> {
+                    // read() 返回负数：发生错误
+                    Log.e(TAG, "❌ read() returned error code: $read (total collected: $totalSamples samples in $chunkCount chunks)")
+                    errorCount++
+                    // 连续错误超过 3 次就放弃
+                    if (errorCount > 3) {
+                        Log.e(TAG, "❌ Too many read errors, stopping recording")
+                        break
+                    }
+                }
             }
         }
 
-        Log.d(TAG, "Recording flow ended")
+        Log.d(TAG, "📊 Recording flow ended: $totalSamples samples in $chunkCount chunks (errors: $errorCount)")
+        recordingState = "STOPPED"
+
     }.flowOn(Dispatchers.IO)  // flowOn：指定 Flow 的上游在 IO 线程执行
 
     /**
@@ -125,17 +205,32 @@ class AudioRecorder(private val context: Context) {
      * 类比：关掉水龙头，水管里的水流完就没了。
      */
     fun stopRecording() {
+        Log.d(TAG, "stopRecording() called, current state: $recordingState")
         isRecording = false
-        audioRecord?.stop()
-        audioRecord?.release()
+        try {
+            audioRecord?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "AudioRecord.stop() failed", e)
+        }
+        try {
+            audioRecord?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "AudioRecord.release() failed", e)
+        }
         audioRecord = null
-        Log.d(TAG, "Recording stopped")
+        recordingState = "IDLE"
+        Log.d(TAG, "Recording stopped and released")
     }
 
     /**
      * 检查是否正在录音
      */
     fun isActive(): Boolean = isRecording
+
+    /**
+     * 获取当前录音状态（用于调试）
+     */
+    fun getState(): String = recordingState
 
     companion object {
         private const val TAG = "AudioRecorder"
