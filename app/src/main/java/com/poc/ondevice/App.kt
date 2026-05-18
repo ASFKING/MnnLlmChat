@@ -5,6 +5,7 @@ import com.alibaba.mls.api.ApplicationProvider
 import com.poc.ondevice.engine.EmbeddingEngine
 import com.poc.ondevice.engine.LLMEngine
 import com.poc.ondevice.engine.ASREngine
+import com.poc.ondevice.engine.TTSEngine
 import com.poc.ondevice.engine.RAGEngine
 import com.poc.ondevice.engine.VectorStore
 import com.poc.ondevice.engine.VisionEngine
@@ -61,12 +62,20 @@ class App : Application() {
     val visionEngine by lazy { VisionEngine(llmEngine) }
 
     /**
-     * asrEngine：语音识别引擎（SenseVoice 离线模型）
+     * asrEngine：语音识别引擎（Sherpa-MNN Zipformer 流式模型）
      *
-     * ASREngine 封装 Sherpa-MNN 的 OfflineRecognizer，
-     * 使用 SenseVoice 模型进行中文语音识别。
+     * ASREngine 封装 Sherpa-MNN 的 OnlineRecognizer，
+     * 使用 Zipformer 模型进行中英双语语音识别。
      */
     val asrEngine by lazy { ASREngine() }
+
+    /**
+     * ttsEngine：语音合成引擎（Sherpa-MNN BertVITS2）
+     *
+     * TTSEngine 封装 Sherpa-MNN 的 OfflineTts，
+     * 使用 BertVITS2 模型进行中英双语语音合成。
+     */
+    val ttsEngine by lazy { TTSEngine() }
 
     /**
      * onCreate：Application 创建时调用（整个 App 生命周期只调用一次）

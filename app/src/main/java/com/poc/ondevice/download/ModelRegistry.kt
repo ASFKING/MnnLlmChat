@@ -76,6 +76,23 @@ object ModelRegistry {
             modelDirName = "sherpa-mnn-streaming-zipformer-bilingual-zh-en-2023-02-20"
         ),
 
+        // ===== 语音合成模型（ModelScope 来源，MNN 格式）=====
+        // 官方 MnnLlmChat 使用的 TTS 模型
+        ModelEntry(
+            modelId = "MNN/bert-vits2-MNN",
+            displayName = "BertVITS2 TTS (中英)",
+            description = "中英双语语音合成，音质自然，~1.4GB，MNN 格式",
+            sizeGB = 1.4,
+            modelDirName = "bert-vits2-MNN"
+        ),
+        ModelEntry(
+            modelId = "MNN/supertonic-tts-mnn",
+            displayName = "SuperTonic TTS (英文)",
+            description = "英文语音合成，轻量快速，~464MB，MNN 格式",
+            sizeGB = 0.5,
+            modelDirName = "supertonic-tts-mnn"
+        ),
+
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
         // bge-small-zh-v1.5 ONNX 版本，来源：hf-mirror.com/onnx-community/bge-small-zh-v1.5-ONNX
         // onnx-community 是 HuggingFace 官方 ONNX 转换组织
