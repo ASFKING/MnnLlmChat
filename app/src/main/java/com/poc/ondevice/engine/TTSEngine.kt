@@ -42,6 +42,24 @@ class TTSEngine {
     val sampleRate: Int = 44100
 
     /**
+     * currentSpeakerId：当前说话人 ID
+     *
+     * BertVITS2 通过整数 ID 选择不同说话人（不同性别/音色）。
+     * 默认 0，用户可通过 setSpeakerId() 切换。
+     */
+    private var currentSpeakerId: Int = 0
+
+    /**
+     * 设置说话人 ID
+     *
+     * @param id 说话人 ID（整数，0/1/2... 具体取决于模型）
+     */
+    fun setSpeakerId(id: Int) {
+        currentSpeakerId = id
+        Log.d(TAG, "Speaker ID set to: $id")
+    }
+
+    /**
      * 加载 TTS 模型
      *
      * suspend fun：挂起函数，在 IO 线程执行模型加载，不阻塞 UI。
@@ -109,8 +127,26 @@ class TTSEngine {
     suspend fun synthesize(text: String, speed: Float = 1.0f): FloatArray =
         withContext(Dispatchers.Default) {
             ttsService?.let { service ->
+                Log.d(TAG, "开始合成语音，文字: ${text.take(50)}... (长度=${text.length})")
+
+                // 先确保初始化完成
+                val ready = service.waitForInitComplete()
+                Log.d(TAG, "waitForInitComplete=$ready")
+
+                if (!ready) {
+                    Log.e(TAG, "TTS 未就绪")
+                    return@withContext FloatArray(0)
+                }
+
                 // process() 返回 ShortArray，每个样本范围 -32768 ~ 32767
-                val shortArray = service.process(text, 0)
+                Log.d(TAG, "调用 service.process()...")
+                val shortArray = service.process(text, currentSpeakerId)
+                Log.d(TAG, "service.process() 完成，样本数=${shortArray.size}")
+
+                if (shortArray.isEmpty()) {
+                    Log.w(TAG, "TTS 返回空音频")
+                    return@withContext FloatArray(0)
+                }
 
                 // ShortArray → FloatArray 转换
                 // 除以 32768f 归一化到 -1.0 ~ 1.0 范围
@@ -144,7 +180,7 @@ class TTSEngine {
     ) = withContext(Dispatchers.Default) {
         ttsService?.let { service ->
             // 一次性合成完整音频
-            val shortArray = service.process(text, 0)
+            val shortArray = service.process(text, currentSpeakerId)
 
             // 分段回调（每段约 4096 个样本，约 93ms @44100Hz）
             val chunkSize = 4096

@@ -406,7 +406,11 @@ class VoiceFragment : Fragment() {
                 Log.d(TAG, "LLM response: ${llmResponse}")
 
                 // ============ Step 3: TTS 语音合成 + 播放 ============
+                // 过滤 <think> 思考标签，只合成实际回答内容
+                // Qwen3 模型会把思考过程包在 <think>...</think> 中，这些不需要读出来
                 val responseText = llmResponse.toString()
+                    .replace(Regex("<think>[\\s\\S]*?</think>"), "")  // 移除 <think>...</think> 块
+                    .trim()  // 去除首尾空白
 
                 if (responseText.isBlank()) {
                     binding.tvTtsStatus.text = "AI 未生成回答"
