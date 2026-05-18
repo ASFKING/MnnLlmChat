@@ -70,10 +70,11 @@ class App : Application() {
     val asrEngine by lazy { ASREngine() }
 
     /**
-     * ttsEngine：语音合成引擎（Sherpa-MNN BertVITS2）
+     * ttsEngine：语音合成引擎（mnn_tts BertVITS2）
      *
-     * TTSEngine 封装 Sherpa-MNN 的 OfflineTts，
+     * TTSEngine 封装 mnn_tts 框架的 TtsService，
      * 使用 BertVITS2 模型进行中英双语语音合成。
+     * 通过 JNI 调用 libmnn_tts.so。
      */
     val ttsEngine by lazy { TTSEngine() }
 
