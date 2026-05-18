@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -56,7 +57,7 @@ class VoiceFragment : Fragment() {
     /** isRecording：是否正在录音 */
     private var isRecording = false
 
-    /** recordingJob：录音协程任务（用于取消） */
+    /** recordingJob：录音协程任务（用于 join 等待完成） */
     private var recordingJob: Job? = null
 
     /** collectedAudioData：录音过程中收集到的所有音频数据 */
@@ -64,6 +65,36 @@ class VoiceFragment : Fragment() {
 
     /** isModelLoaded：ASR 模型是否已加载 */
     private var isModelLoaded = false
+
+    // ==================== 权限请求 ====================
+    /**
+     * 录音权限请求器
+     *
+     * registerForActivityResult：Android 推荐的权限请求方式（替代 onRequestPermissionsResult）
+     * ActivityResultContracts.RequestPermission()：请求单个权限的契约
+     *
+     * 工作流程：
+     * 1. 调用 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+     * 2. 系统弹出权限对话框，用户选择允许/拒绝
+     * 3. 回调 lambda 收到结果（granted: Boolean）
+     *
+     * 类比：就像你去借东西——先问"能借我吗？"（launch），
+     *       对方说"可以"（granted=true）或"不行"（granted=false）。
+     */
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            // 用户允许了录音权限，开始录音
+            Log.d(TAG, "RECORD_AUDIO permission granted by user")
+            startRecordingInternal()
+        } else {
+            // 用户拒绝了录音权限
+            Log.w(TAG, "RECORD_AUDIO permission denied by user")
+            Toast.makeText(requireContext(), "需要录音权限才能使用语音功能", Toast.LENGTH_LONG).show()
+            binding.tvAsrResult.text = "❌ 需要录音权限，请在系统设置中授权"
+        }
+    }
 
     // ==================== 生命周期 ====================
 
@@ -105,7 +136,8 @@ class VoiceFragment : Fragment() {
                         Toast.makeText(requireContext(), "ASR 模型尚未加载", Toast.LENGTH_SHORT).show()
                         return@setOnTouchListener true
                     }
-                    startRecording()
+                    // 检查并请求录音权限
+                    checkPermissionAndRecord()
                     true  // 返回 true 表示消费了这个事件
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -126,13 +158,43 @@ class VoiceFragment : Fragment() {
         }
     }
 
+    // ==================== 权限检查 ====================
+
+    /**
+     * 检查录音权限，有权限就录音，没权限就请求
+     *
+     * Android 6.0+ 的危险权限（如 RECORD_AUDIO）必须在运行时动态申请。
+     * 光在 AndroidManifest.xml 里声明不够，必须弹窗让用户确认。
+     *
+     * 流程：
+     * 1. 检查是否已有权限 → 有则直接录音
+     * 2. 没有权限 → 弹出系统权限对话框
+     * 3. 用户选择后 → 回调 requestPermissionLauncher
+     */
+    private fun checkPermissionAndRecord() {
+        when {
+            // 已经有权限了，直接录音
+            ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                Log.d(TAG, "RECORD_AUDIO permission already granted")
+                startRecordingInternal()
+            }
+            // 需要请求权限
+            else -> {
+                Log.d(TAG, "Requesting RECORD_AUDIO permission")
+                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+
     // ==================== 模型加载 ====================
 
     /**
-     * 加载 SenseVoice ASR 模型
+     * 加载 ASR 模型
      *
-     * SenseVoice 是离线模型，加载速度很快（< 1s）。
-     * 模型约 200MB，内存占用约 300MB，适合常驻。
+     * 使用 Zipformer 流式模型（中英双语），MnnLlmChat 官方使用的模型。
+     * 模型约 295MB，内存占用约 300MB，适合常驻。
      */
     private fun loadASRModel() {
         binding.tvAsrResult.text = "正在加载 ASR 模型..."
@@ -178,11 +240,11 @@ class VoiceFragment : Fragment() {
     // ==================== 录音控制 ====================
 
     /**
-     * 开始录音
+     * 开始录音（内部方法，权限已确认后调用）
      *
-     * 按下按钮时调用。启动 AudioRecorder，开始收集音频数据。
+     * 按下按钮且有权限时调用。启动 AudioRecorder，开始收集音频数据。
      */
-    private fun startRecording() {
+    private fun startRecordingInternal() {
         isRecording = true
         collectedAudioData.clear()
 
@@ -215,11 +277,8 @@ class VoiceFragment : Fragment() {
      *
      * 松开按钮时调用。停止录音 → 等待 Flow 自然结束 → 把收集到的音频送入 ASR → 显示识别结果。
      *
-     * 关键修复：不要立刻 cancel 协程！
-     * 之前的 bug：stopRecording() + cancel() 太快，IO 线程的 emit() 还没执行协程就被取消了，
-     * 导致 collectedAudioData 永远是空的。
-     * 修复后：只设置 isRecording = false，让 while 循环自然退出，Flow 自然结束，
-     * 然后用 join() 等协程完成，确保所有数据都收集完毕。
+     * 关键：不要立刻 cancel 协程！
+     * 用 join() 等待录音协程自然完成，确保所有数据都收集完毕。
      */
     private fun stopRecordingAndRecognize() {
         isRecording = false
