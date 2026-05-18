@@ -42,6 +42,18 @@ class TTSEngine {
         try {
             Log.d(TAG, "Loading TTS model from: $modelDir")
 
+            // 列出目录下所有文件（调试用）
+            val dir = java.io.File(modelDir)
+            val files = dir.listFiles()
+            if (files != null) {
+                Log.d(TAG, "Directory contains ${files.size} files:")
+                for (f in files) {
+                    Log.d(TAG, "  ${f.name} (${f.length()} bytes, isFile=${f.isFile})")
+                }
+            } else {
+                Log.e(TAG, "Directory is null or not accessible: $modelDir")
+            }
+
             // 查找模型文件
             // BertVITS2 模型通常是 model.onnx 或 model.mnn
             val modelFile = findModelFile(modelDir)
