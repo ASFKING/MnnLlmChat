@@ -42,17 +42,15 @@ class TTSEngine {
         try {
             Log.d(TAG, "Loading TTS model from: $modelDir")
 
-            // 列出目录下所有文件（调试用）
+            // 列出目录下所有文件（递归，调试用）
             val dir = java.io.File(modelDir)
-            val files = dir.listFiles()
-            if (files != null) {
-                Log.d(TAG, "Directory contains ${files.size} files:")
-                for (f in files) {
-                    Log.d(TAG, "  ${f.name} (${f.length()} bytes, isFile=${f.isFile})")
-                }
-            } else {
-                Log.e(TAG, "Directory is null or not accessible: $modelDir")
+            Log.d(TAG, "=== Directory tree for: $modelDir ===")
+            dir.walkTopDown().forEach { f ->
+                val indent = "  ".repeat(f.absolutePath.removePrefix(modelDir).count { it == '/' })
+                val type = if (f.isDirectory) "[DIR]" else "[FILE]"
+                Log.d(TAG, "$indent$type ${f.name} (${f.length()} bytes)")
             }
+            Log.d(TAG, "=== End of directory tree ===")
 
             // 查找模型文件
             // BertVITS2 模型通常是 model.onnx 或 model.mnn
@@ -125,25 +123,43 @@ class TTSEngine {
         onComplete()
     }
 
-    /** 查找模型文件 */
+    /** 查找模型文件（递归搜索子目录） */
     private fun findModelFile(modelDir: String): File? {
         val candidates = listOf("model.onnx", "model.mnn", "model.int8.onnx")
+        // 先在顶层目录找
         for (name in candidates) {
             val file = File(modelDir, name)
             if (file.exists()) return file
         }
-        return File(modelDir).listFiles()?.firstOrNull {
-            it.extension == "onnx" || it.extension == "mnn"
+        // 再递归搜索子目录
+        val dir = File(modelDir)
+        dir.listFiles()?.filter { it.isDirectory }?.forEach { subDir ->
+            for (name in candidates) {
+                val file = File(subDir, name)
+                if (file.exists()) return file
+            }
+            // 子目录中找任意 .onnx 或 .mnn 文件
+            subDir.listFiles()?.firstOrNull {
+                it.isFile && (it.extension == "onnx" || it.extension == "mnn")
+            }?.let { return it }
+        }
+        // 最后在整个目录树中找
+        return dir.walkTopDown().firstOrNull {
+            it.isFile && (it.extension == "onnx" || it.extension == "mnn")
         }
     }
 
-    /** 查找文件 */
+    /** 查找文件（递归搜索子目录） */
     private fun findFile(modelDir: String, candidates: List<String>): File? {
+        // 先在顶层目录找
         for (name in candidates) {
             val file = File(modelDir, name)
             if (file.exists()) return file
         }
-        return null
+        // 再递归搜索子目录
+        return File(modelDir).walkTopDown().firstOrNull {
+            it.isFile && candidates.contains(it.name)
+        }
     }
 
     /** 释放资源 */

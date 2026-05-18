@@ -273,7 +273,7 @@ class ModelDownloader(private val context: Context) {
     }
 
     /**
-     * 从 ModelScope 仓库下载（原有逻辑，抽取为独立方法）
+     * 从 ModelScope 仓库下载（递归处理子目录）
      */
     private suspend fun downloadFromModelScope(
         model: ModelEntry,
@@ -282,43 +282,37 @@ class ModelDownloader(private val context: Context) {
         onComplete: (modelPath: File) -> Unit,
         onError: (error: String) -> Unit
     ) {
-        // Step 1: 获取仓库文件列表
+        // Step 1: 获取仓库文件列表（递归展开子目录）
         Log.d(TAG, "Fetching file list for: ${model.modelId}")
-        val files = fetchRepoFiles(model.modelId)
+        val files = fetchAllFilesRecursive(model.modelId, "")
         if (files.isEmpty()) {
             onError("获取文件列表失败：返回为空")
             return
         }
 
-        // sumOf {}：对列表中每个元素执行 lambda，把结果加起来
-        // 这里是计算所有文件的总大小
+        Log.d(TAG, "Total files to download: ${files.size}")
         val totalSize = files.sumOf { it.size }
         var downloadedSize = 0L
 
-        // 创建模型目录（包括所有父目录）
         modelDir.mkdirs()
 
         // Step 2: 逐个下载文件
         for (fileInfo in files) {
-            // 目标文件路径：模型目录 + 文件在仓库中的相对路径
             val targetFile = File(modelDir, fileInfo.path)
-            // parentFile：获取父目录
-            // ?.mkdirs()：安全调用，如果父目录不为 null 就创建
             targetFile.parentFile?.mkdirs()
 
-            // 如果文件已存在且大小匹配，跳过（支持断点续传的基础）
             if (targetFile.exists() && targetFile.length() == fileInfo.size) {
                 downloadedSize += fileInfo.size
-                continue  // continue：跳过本次循环，进入下一次
+                Log.d(TAG, "File already exists, skipping: ${fileInfo.path}")
+                continue
             }
 
-            // 下载单个文件
+            Log.d(TAG, "Downloading: ${fileInfo.path} (${fileInfo.size} bytes)")
             downloadFile(
                 modelId = model.modelId,
                 filePath = fileInfo.path,
                 targetFile = targetFile,
                 onFileProgress = { fileDownloaded ->
-                    // 更新总进度：已下载的文件大小 + 当前文件已下载的大小
                     onProgress(
                         downloadedSize + fileDownloaded,
                         totalSize,
@@ -335,38 +329,62 @@ class ModelDownloader(private val context: Context) {
     }
 
     /**
-     * 获取仓库文件列表
+     * 递归获取仓库中所有文件（展开子目录）
      *
-     * 调用 ModelScope API 获取仓库中所有文件的信息
-     * API 返回格式：
-     * {
-     *   "Code": 0,
-     *   "Data": {
-     *     "Files": [
-     *       { "Path": "config.json", "Size": 1234, "Sha256": "abc...", "Type": "blob" },
-     *       { "Path": "subdir/file.bin", "Size": 5678, "Sha256": "def...", "Type": "tree" }
-     *     ]
-     *   }
-     * }
+     * ModelScope API 返回的文件列表中，子目录类型为 "tree"，
+     * 需要递归调用 API 获取子目录中的实际文件。
      *
-     * @param modelId 模型 ID，格式 "MNN/Qwen3-1.7B-MNN"
+     * @param modelId 模型 ID（如 "MNN/bert-vits2-MNN"）
+     * @param subPath 子目录路径（如 "common"），空字符串表示根目录
+     * @return 所有实际文件的列表
+     */
+    private suspend fun fetchAllFilesRecursive(
+        modelId: String,
+        subPath: String
+    ): List<RepoFileInfo> {
+        val entries = fetchRepoFiles(modelId, subPath)
+        val result = mutableListOf<RepoFileInfo>()
+
+        for (entry in entries) {
+            if (entry.type == "tree") {
+                // 是子目录，递归获取其内容
+                val subDirPath = if (subPath.isEmpty()) entry.path else "$subPath/${entry.path}"
+                Log.d(TAG, "Recursing into directory: $subDirPath")
+                val subFiles = fetchAllFilesRecursive(modelId, subDirPath)
+                result.addAll(subFiles)
+            } else {
+                // 是实际文件，加入列表
+                val fullPath = if (subPath.isEmpty()) entry.path else "$subPath/${entry.path}"
+                result.add(RepoFileInfo(
+                    path = fullPath,
+                    size = entry.size,
+                    sha256 = entry.sha256,
+                    type = entry.type
+                ))
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * 获取仓库文件列表（支持子目录）
+     *
+     * @param modelId 模型 ID，格式 "group/repo"
+     * @param subPath 子目录路径（如 "common"），空字符串表示根目录
      * @return 文件信息列表
      */
-    private suspend fun fetchRepoFiles(modelId: String): List<RepoFileInfo> {
-        // withContext(Dispatchers.IO)：确保网络操作在 IO 线程执行
+    private suspend fun fetchRepoFiles(modelId: String, subPath: String = ""): List<RepoFileInfo> {
         return withContext(Dispatchers.IO) {
-            // split("/") 把 "MNN/Qwen3-1.7B-MNN" 拆成 ["MNN", "Qwen3-1.7B-MNN"]
             val parts = modelId.split("/")
-            // require()：如果条件不满足，抛出 IllegalArgumentException
-            // 与 check() 的区别：require 用于参数校验，check 用于状态校验
             require(parts.size == 2) { "modelId 格式错误，应为 'group/repo'" }
 
-            val group = parts[0]  // "MNN"
-            val repo = parts[1]   // "Qwen3-1.7B-MNN"
+            val group = parts[0]
+            val repo = parts[1]
 
-            // 拼接 API URL
-            // 结果：https://modelscope.cn/api/v1/models/MNN/Qwen3-1.7B-MNN/repo/files?Recursive=1
-            val url = URL("$MS_API_BASE/$group/$repo/repo/files?Recursive=1")
+            // 如果有子目录路径，加到 URL 中
+            val subPathParam = if (subPath.isEmpty()) "" else "&SubPath=$subPath"
+            val url = URL("$MS_API_BASE/$group/$repo/repo/files?Recursive=0$subPathParam")
 
             // 打开 HTTP 连接
             // HttpURLConnection 是 Java 标准库的 HTTP 客户端
