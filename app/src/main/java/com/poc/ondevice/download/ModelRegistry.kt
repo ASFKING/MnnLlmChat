@@ -53,15 +53,15 @@ object ModelRegistry {
         ),
 
         // ===== 多模态视觉模型（ModelScope 来源）=====
-        // Qwen2.5-VL-3B：能同时理解图片和文字的多模态模型
-        // 3B 参数，约 2.5GB，需要 8GB+ RAM 设备
-        // 用途：图片描述、图文问答、OCR 等多模态任务
+        // Qwen3.5-2B-MNN：Qwen3.5 系列是多模态模型，同时支持文字推理和图片理解
+        // tags: ["Think", "Vision"] — 阿里官方模型市场确认支持图像理解
+        // 2B 参数，约 2GB，适合 8GB 设备
         ModelEntry(
-            modelId = "MNN/Qwen2.5-VL-3B-Instruct-MNN",  // ModelScope 仓库路径
-            displayName = "Qwen2.5-VL-3B (多模态)",        // UI 显示名称，括号标注用途
-            description = "通义千问2.5-VL 3B 多模态模型，支持图片+文本理解，需要 8GB+ 设备",
-            sizeGB = 2.5,                                   // 模型大小，约 2.5GB
-            modelDirName = "Qwen2.5-VL-3B-Instruct-MNN"    // 本地存储目录名
+            modelId = "MNN/Qwen3.5-2B-MNN",              // ModelScope 仓库路径
+            displayName = "Qwen3.5-2B (多模态)",           // UI 显示名称
+            description = "通义千问3.5 2B 多模态模型，支持深度思考 + 图片理解，适合 8GB 设备",
+            sizeGB = 2.0,                                   // 模型大小，约 2GB
+            modelDirName = "Qwen3.5-2B-MNN"                // 本地存储目录名
         ),
 
         // ===== 文本嵌入模型（hf-mirror 直接下载 ONNX 格式）=====
