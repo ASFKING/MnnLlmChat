@@ -19,6 +19,7 @@ import com.poc.ondevice.App
 import com.poc.ondevice.engine.LLMEngine
 import com.poc.ondevice.util.JsonUtils
 import com.poc.ondevice.data.ExtractionStore
+import com.poc.ondevice.data.GenerationStore
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -84,6 +85,9 @@ class ChatFragment : Fragment() {
     /** extractionStore：提取记录存储 */
     private val extractionStore by lazy { ExtractionStore(requireContext()) }
 
+    /** generationStore：文档生成记录存储 */
+    private val generationStore by lazy { GenerationStore(requireContext()) }
+
     /**
      * isGenerating：是否正在生成中
      *
@@ -128,6 +132,15 @@ class ChatFragment : Fragment() {
             val input = binding.etInput.text.toString().trim()
             if (input.isNotBlank()) {
                 extractStructured(input)
+            }
+        }
+
+        // 文档生成按钮点击事件
+        // 输入格式："类型:关键信息"，例如："通知:明天下午3点开会，地点会议室A"
+        binding.btnGenerate.setOnClickListener {
+            val input = binding.etInput.text.toString().trim()
+            if (input.isNotBlank()) {
+                generateDocument(input)
             }
         }
     }
@@ -419,6 +432,93 @@ class ChatFragment : Fragment() {
                 isGenerating = false
                 binding.btnSend.isEnabled = true
                 binding.btnExtract.isEnabled = true
+            }
+        }
+    }
+
+    /**
+     * 文档生成：根据用户输入生成格式化文档
+     *
+     * 输入格式："类型:关键信息"
+     * 例如："通知:明天下午3点在会议室A开项目评审会，请全体成员参加"
+     *
+     * 流程：
+     * 1. 解析输入，提取文档类型和关键信息
+     * 2. 构建生成 prompt（JsonUtils.buildGeneratePrompt）
+     * 3. 调用 LLM 流式生成
+     * 4. 保存生成记录
+     *
+     * @param text 用户输入（格式："类型:关键信息"）
+     */
+    private fun generateDocument(text: String) {
+        if (isGenerating) {
+            Toast.makeText(requireContext(), "请等待当前任务完成", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!llmEngine.isLoaded) {
+            Toast.makeText(requireContext(), "模型尚未加载", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 解析输入：用冒号分隔文档类型和关键信息
+        // 如果没有冒号，默认用"文档"作为类型
+        val parts = text.split(":", "：", limit = 2)  // 同时处理英文冒号和中文冒号
+        val docType = if (parts.size > 1) parts[0].trim() else "文档"
+        val inputData = if (parts.size > 1) parts[1].trim() else text
+
+        // 添加用户消息
+        messages.add(ChatMessage("user", "[生成 $docType] $inputData"))
+        adapter.notifyItemInserted(messages.size - 1)
+        binding.rvMessages.smoothScrollToPosition(messages.size - 1)
+        binding.etInput.text?.clear()
+
+        // 添加空的 AI 消息（占位）
+        messages.add(ChatMessage("assistant", ""))
+        adapter.notifyItemInserted(messages.size - 1)
+
+        isGenerating = true
+        binding.btnSend.isEnabled = false
+        binding.btnExtract.isEnabled = false
+        binding.btnGenerate.isEnabled = false
+
+        // 构建生成 prompt
+        val prompt = JsonUtils.buildGeneratePrompt(docType, inputData)
+
+        lifecycleScope.launch {
+            try {
+                // 收集 LLM 输出
+                val rawOutput = StringBuilder()
+                llmEngine.generateStream(prompt).collect { token ->
+                    rawOutput.append(token)
+                    val lastIndex = messages.size - 1
+                    messages[lastIndex] = messages[lastIndex].copy(content = rawOutput.toString())
+                    adapter.notifyItemChanged(lastIndex, "update_text")
+                    binding.rvMessages.scrollToPosition(lastIndex)
+                }
+
+                // 保存生成记录
+                val generatedContent = rawOutput.toString()
+                generationStore.save(docType, inputData, generatedContent)
+
+                // 显示统计
+                val stats = generationStore.getStats()
+                Toast.makeText(
+                    requireContext(),
+                    "文档生成完成 (累计生成 ${stats.total} 篇)",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+            } catch (e: Exception) {
+                val lastIndex = messages.size - 1
+                messages[lastIndex] = messages[lastIndex].copy(
+                    content = "文档生成出错: ${e.message}"
+                )
+                adapter.notifyItemChanged(lastIndex)
+            } finally {
+                isGenerating = false
+                binding.btnSend.isEnabled = true
+                binding.btnExtract.isEnabled = true
+                binding.btnGenerate.isEnabled = true
             }
         }
     }
