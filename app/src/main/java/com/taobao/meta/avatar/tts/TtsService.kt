@@ -1,5 +1,11 @@
 package com.taobao.meta.avatar.tts
 
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+
 /**
  * TtsService：MNN TTS 原生服务的 JNI 绑定
  *
@@ -97,7 +103,7 @@ class TtsService {
     suspend fun init(modelDir: String): Boolean {
         if (isLoaded) return true
         if (initDeferred == null) {
-            initDeferred = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
+            initDeferred = CoroutineScope(Dispatchers.IO).async {
                 nativeLoadResourcesFromFile(
                     ttsServiceNative,
                     modelDir,
