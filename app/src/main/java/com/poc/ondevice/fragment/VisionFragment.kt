@@ -67,7 +67,7 @@ class VisionFragment : Fragment() {
      * imagePicker：系统图片选择器
      *
      * ActivityResultContracts.GetContent()：Android 推荐的"获取内容"方式
-     * "image/*"：只选择图片类型
+     * 参数 image 表示只选择图片类型
      *
      * registerForActivityResult() 注册一个回调：
      * 用户选完图片后，系统会回调 lambda，传入选中图片的 Uri
